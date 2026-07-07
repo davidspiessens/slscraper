@@ -69,10 +69,10 @@ async function getProductsOnPage(page) {
   }, PRODUCT_CARD_SELECTOR);
 }
 
-/** Zoekt een bestaand product op basis van supplier + supplier_id, of maakt het aan. */
+/** Zoekt een bestaand product op basis van supplier + supplier_product_id, of maakt het aan. */
 async function getOrCreateProductId(prod) {
   const [rows] = await pool.query(
-    "SELECT id FROM bstock_product WHERE supplier = ? AND supplier_id = ? LIMIT 1",
+    "SELECT id FROM bstock_product WHERE supplier_id = ? AND supplier_product_id = ? LIMIT 1",
     [SUPPLIER, prod.id]
   );
   if (rows.length > 0) {
@@ -80,7 +80,7 @@ async function getOrCreateProductId(prod) {
   }
 
   const [result] = await pool.query(
-    "INSERT INTO bstock_product (supplier, supplier_id, title, url) VALUES (?, ?, ?, ?)",
+    "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, url) VALUES (?, ?, ?, ?)",
     [SUPPLIER, prod.id, prod.title, prod.url]
   );
   return result.insertId;
