@@ -12,6 +12,8 @@ const BASE_URL = "https://www.bax-shop.be";
 const SEARCH_URL = `${BASE_URL}/nl/hele-assortiment?keyword=${encodeURIComponent(keyword)}`;
 const SUPPLIER = 1; // bax-shop.be
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const PRODUCT_CARD_SELECTOR =
   '.result';
 
@@ -145,9 +147,11 @@ async function scrape() {
   });
   const page = await context.newPage();
 
-  const allProducts = [];
   let currentUrl = SEARCH_URL;
   let pageNum = 1;
+  let totalFound = 0;
+  let totalSaved = 0;
+  const seen = new Set();
 
   while (currentUrl) {
     console.log(`Pagina ${pageNum}: ${currentUrl}`);
@@ -164,32 +168,36 @@ async function scrape() {
     }
 
     const products = await getProductsOnPage(page);
-    allProducts.push(...products);
-    console.log(`  → ${products.length} producten (totaal: ${allProducts.length})`);
+    totalFound += products.length;
+
+    // Dedupliceren op URL (of titel als fallback), ook over pagina's heen
+    const unique = [];
+    for (const prod of products) {
+      const key = prod.url || prod.title;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        unique.push(prod);
+      }
+    }
+
+    const saved = await saveProducts(unique);
+    totalSaved += saved;
+    console.log(`  → ${products.length} producten gevonden, ${saved} opgeslagen (totaal opgeslagen: ${totalSaved})`);
 
     const nextUrl = await getNextPageUrl(page);
     currentUrl = nextUrl && nextUrl !== currentUrl ? nextUrl : null;
     pageNum += 1;
-  }
 
-  await browser.close();
-
-  // Dedupliceren op URL (of titel als fallback)
-  const seen = new Set();
-  const unique = [];
-  for (const prod of allProducts) {
-    const key = prod.url || prod.title;
-    if (key && !seen.has(key)) {
-      seen.add(key);
-      unique.push(prod);
+    if (currentUrl) {
+      console.log("  ⏳ 30s wachten voor volgende pagina...");
+      await sleep(30000);
     }
   }
 
-  console.log(`\nWegschrijven naar database...`);
-  const saved = await saveProducts(unique);
+  await browser.close();
   await pool.end();
 
-  console.log(`\n✓ ${saved} product(en) opgeslagen in de database`);
+  console.log(`\n✓ ${totalSaved} product(en) opgeslagen in de database (${totalFound} gevonden)`);
 }
 
 scrape();
