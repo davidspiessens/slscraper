@@ -40,7 +40,7 @@ async function getProductsOnPage(page) {
           '.van-prijs'
         );
 
-      const priceOriginal = priceOriginalEl ? parseFloat(priceOriginalEl.innerText.trim().replace('€ ', '').replace('-', '00')) : null;
+      let priceOriginal = priceOriginalEl ? parseFloat(priceOriginalEl.innerText.trim().replace('.','').replace('€ ', '').replace('-', '00').replace(',','.')) : null;
         
       // --- Prijs nu
       const priceNowEl =
@@ -48,7 +48,9 @@ async function getProductsOnPage(page) {
           '.voor-prijs'
         );
 
-      const priceNow = priceNowEl ? parseFloat(priceNowEl.innerText.trim().replace('€ ', '').replace('-', '00')) : null;
+      const priceNow = priceNowEl ? parseFloat(priceNowEl.innerText.trim().replace('.','').replace('€ ', '').replace('-', '00').replace(',','.')) : null;
+
+      if (isNaN(priceOriginal)) priceOriginal = priceNow;
 
       // --- Extra korting / badge ---
       const discountEl = card.querySelector(

@@ -8,7 +8,7 @@
 const pool = require("./db");
 
 async function run() {
-  const [result] = await pool.query("UPDATE brand SET first_word = name where length(first_word) = 0");
+  const [result] = await pool.query("UPDATE brand SET weight=10000");
   console.log(`✓ ${result.affectedRows} rij(en) bijgewerkt.`);
   await pool.end();
 }
