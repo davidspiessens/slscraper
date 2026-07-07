@@ -40,7 +40,7 @@ $lightestProductsSql = "
         ) m ON m.max_id = bpp.id
     ) lp ON lp.bstock_product_id = p.id
     ORDER BY b.weight ASC
-    LIMIT 20
+    LIMIT 50
 ";
 
 $biggestDiscountsSql = "
@@ -48,6 +48,7 @@ $biggestDiscountsSql = "
            lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
            (lp.priceOriginal - lp.priceNow) AS price_diff
     FROM bstock_product p
+    LEFT JOIN brand b ON b.id = p.brand_id
     JOIN (
         SELECT bpp.bstock_product_id, bpp.priceOriginal, bpp.priceNow, bpp.discount_label, bpp.created
         FROM bstock_product_price bpp
@@ -57,8 +58,9 @@ $biggestDiscountsSql = "
             GROUP BY bstock_product_id
         ) m ON m.max_id = bpp.id
     ) lp ON lp.bstock_product_id = p.id
+    WHERE b.weight IS NULL OR b.weight < 10000
     ORDER BY price_diff DESC
-    LIMIT 20
+    LIMIT 50
 ";
 
 $lightestProducts = $mysqli->query($lightestProductsSql)->fetch_all(MYSQLI_ASSOC);
