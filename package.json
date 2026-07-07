@@ -1,0 +1,15 @@
+{
+  "name": "baxscraper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Scrape B-stock Pioneer producten van bax-shop.be",
+  "main": "bax.js",
+  "scripts": {
+    "start": "node bax.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "mysql2": "^3.22.5",
+    "playwright": "^1.45.0"
+  }
+}

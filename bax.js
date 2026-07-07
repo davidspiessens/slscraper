@@ -1,0 +1,195 @@
+const { chromium } = require("playwright");
+const pool = require("./db");
+
+const keyword = process.argv[2];
+if (!keyword) {
+  console.error("Gebruik: node bax.js <keyword>");
+  console.error('Voorbeeld: node bax.js "b-stock+pioneer"');
+  process.exit(1);
+}
+
+const BASE_URL = "https://www.bax-shop.be";
+const SEARCH_URL = `${BASE_URL}/nl/hele-assortiment?keyword=${encodeURIComponent(keyword)}`;
+const SUPPLIER = 1; // bax-shop.be
+
+const PRODUCT_CARD_SELECTOR =
+  '.result';
+
+/** Haal alle productkaarten op de huidige pagina op. */
+async function getProductsOnPage(page) {
+  return page.evaluate((cardSelector) => {
+    const results = [];
+    const cards = document.querySelectorAll(cardSelector);
+
+    cards.forEach((card) => {
+      // --- Titel ---
+      const titleEl = card.querySelector(
+        '[data-test="product-title"], [class*="title"], [class*="name"], h2, h3'
+      );
+      const title = titleEl ? titleEl.innerText.trim() : null;
+
+      // --- URL ---
+      const linkEl = card.querySelector("a[href]");
+      const url = linkEl ? linkEl.href : null;
+
+      // --- Normale prijs ---
+      const priceOriginalEl =
+        card.querySelector(
+          '.van-prijs'
+        );
+
+      const priceOriginal = priceOriginalEl ? parseFloat(priceOriginalEl.innerText.trim().replace('€ ', '').replace('-', '00')) : null;
+        
+      // --- Prijs nu
+      const priceNowEl =
+        card.querySelector(
+          '.voor-prijs'
+        );
+
+      const priceNow = priceNowEl ? parseFloat(priceNowEl.innerText.trim().replace('€ ', '').replace('-', '00')) : null;
+
+      // --- Extra korting / badge ---
+      const discountEl = card.querySelector(
+        '.product-label'
+      );
+      const discount = discountEl ? discountEl.innerText.trim() : null;
+
+      // --- Product ID ---
+      const idMatch = url ? url.match(/\/product\/(\d+)\//) : null;
+      const id = idMatch ? idMatch[1] : null;
+
+      if (title && title.indexOf('(B-Stock)') > -1) {
+        results.push({ id, title, priceOriginal, priceNow, discount, url });
+      }
+    });
+
+    return results;
+  }, PRODUCT_CARD_SELECTOR);
+}
+
+/** Zoekt een bestaand product op basis van supplier + supplier_id, of maakt het aan. */
+async function getOrCreateProductId(prod) {
+  const [rows] = await pool.query(
+    "SELECT id FROM bstock_product WHERE supplier = ? AND supplier_id = ? LIMIT 1",
+    [SUPPLIER, prod.id]
+  );
+  if (rows.length > 0) {
+    return rows[0].id;
+  }
+
+  const [result] = await pool.query(
+    "INSERT INTO bstock_product (supplier, supplier_id, title, url) VALUES (?, ?, ?, ?)",
+    [SUPPLIER, prod.id, prod.title, prod.url]
+  );
+  return result.insertId;
+}
+
+/** Slaat producten en hun prijzen op in de database. */
+async function saveProducts(products) {
+  let saved = 0;
+  let skipped = 0;
+
+  for (const prod of products) {
+    if (!prod.id || !prod.title || !prod.url) {
+      skipped += 1;
+      continue;
+    }
+    if (prod.priceOriginal == null || prod.priceNow == null) {
+      skipped += 1;
+      continue;
+    }
+    
+    const productId = await getOrCreateProductId(prod);
+
+    try {
+      await pool.query(
+        "INSERT INTO bstock_product_price (bstock_product_id, priceOriginal, priceNow, discount_label) VALUES (?, ?, ?, ?)",
+        [productId, prod.priceOriginal, prod.priceNow, prod.discount || ""]
+      );
+      saved += 1;
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  if (skipped > 0) {
+    console.log(`  ⚠ ${skipped} product(en) overgeslagen wegens ontbrekende velden.`);
+  }
+
+  return saved;
+}
+
+/** Geeft de URL van de volgende pagina, of null als er geen is. */
+async function getNextPageUrl(page) {
+  const nextHref = await page.evaluate(() => {
+    const btn = document.querySelector(
+      'a.next'
+    );
+    return btn ? btn.getAttribute("href") : null;
+  });
+
+  if (nextHref) {
+    return nextHref.startsWith("http") ? nextHref : BASE_URL + nextHref;
+  }
+  return null;
+}
+
+async function scrape() {
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+      "AppleWebKit/537.36 (KHTML, like Gecko) " +
+      "Chrome/124.0.0.0 Safari/537.36",
+    locale: "nl-BE",
+  });
+  const page = await context.newPage();
+
+  const allProducts = [];
+  let currentUrl = SEARCH_URL;
+  let pageNum = 1;
+
+  while (currentUrl) {
+    console.log(`Pagina ${pageNum}: ${currentUrl}`);
+    await page.goto(currentUrl, { waitUntil: "networkidle", timeout: 30000 });
+
+    try {
+      await page.waitForSelector(
+        '.result',
+        { timeout: 15000 }
+      );
+    } catch (err) {
+      console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
+      break;
+    }
+
+    const products = await getProductsOnPage(page);
+    allProducts.push(...products);
+    console.log(`  → ${products.length} producten (totaal: ${allProducts.length})`);
+
+    const nextUrl = await getNextPageUrl(page);
+    currentUrl = nextUrl && nextUrl !== currentUrl ? nextUrl : null;
+    pageNum += 1;
+  }
+
+  await browser.close();
+
+  // Dedupliceren op URL (of titel als fallback)
+  const seen = new Set();
+  const unique = [];
+  for (const prod of allProducts) {
+    const key = prod.url || prod.title;
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      unique.push(prod);
+    }
+  }
+
+  console.log(`\nWegschrijven naar database...`);
+  const saved = await saveProducts(unique);
+  await pool.end();
+
+  console.log(`\n✓ ${saved} product(en) opgeslagen in de database`);
+}
+
+scrape();
