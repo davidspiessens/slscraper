@@ -9,7 +9,7 @@ $mysqli = get_db_connection();
 $brandListSql = "
     SELECT b.id, b.name, b.weight, COUNT(p.id) AS product_count
     FROM brand b
-    LEFT JOIN bstock_product p ON p.brand_id = b.id
+    LEFT JOIN bstock_product p ON p.brand_id = b.id AND p.archived = 0 AND p.ignored = 0
     GROUP BY b.id, b.name, b.weight
     ORDER BY b.weight ASC, b.name ASC
     LIMIT 20
