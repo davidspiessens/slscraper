@@ -16,8 +16,24 @@ function extractFirstWord(title) {
 }
 
 async function run() {
-  const [brands] = await pool.query("SELECT id, name FROM brand");
-  const [products] = await pool.query("SELECT id, title FROM bstock_product");
+  const [brandRows] = await pool.query("SELECT id, first_word FROM brand ORDER BY id ASC");
+  const [products] = await pool.query("SELECT id, title FROM bstock_product WHERE brand_id IS NULL");
+
+  // Meerdere merken kunnen per ongeluk hetzelfde first_word hebben (bv. na een
+  // handmatige rename van brand.name). Gebruik dan enkel het oudste merk-id,
+  // anders "wint" een willekeurig merk de gekoppelde producten.
+  const brandsByWord = new Map();
+  for (const brand of brandRows) {
+    const key = brand.first_word.toLowerCase();
+    if (!brandsByWord.has(key)) {
+      brandsByWord.set(key, brand);
+    } else {
+      console.warn(
+        `  ⚠ Merk-id ${brand.id} heeft hetzelfde first_word "${brand.first_word}" als merk-id ${brandsByWord.get(key).id}. Merk-id ${brand.id} wordt overgeslagen — dubbele merken opruimen aanbevolen.`
+      );
+    }
+  }
+  const brands = [...brandsByWord.values()];
 
   console.log(`${brands.length} merk(en), ${products.length} product(en) gevonden.`);
 
@@ -36,7 +52,7 @@ async function run() {
   let totalLinked = 0;
 
   for (const brand of brands) {
-    const key = brand.name.toLowerCase();
+    const key = brand.first_word.toLowerCase();
     const productIds = productIdsByWord.get(key) || [];
     if (productIds.length === 0) continue;
 
@@ -45,7 +61,7 @@ async function run() {
       [brand.id, productIds]
     );
     totalLinked += result.affectedRows;
-    console.log(`  → "${brand.name}": ${result.affectedRows} product(en) gekoppeld.`);
+    console.log(`  → "${brand.first_word}": ${result.affectedRows} product(en) gekoppeld.`);
   }
 
   console.log(`\n✓ ${totalLinked} product(en) gekoppeld aan een merk.`);

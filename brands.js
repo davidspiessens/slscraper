@@ -15,16 +15,18 @@ function extractBrand(title) {
   return match ? match[1] : null;
 }
 
-async function getExistingBrandNames() {
-  const [rows] = await pool.query("SELECT name FROM brand");
-  return new Set(rows.map((row) => row.name.toLowerCase()));
+async function getExistingFirstWords() {
+  const [rows] = await pool.query("SELECT first_word FROM brand");
+  return new Set(rows.map((row) => row.first_word.toLowerCase()));
 }
 
 async function run() {
   const [rows] = await pool.query("SELECT DISTINCT title FROM bstock_product WHERE brand_id IS NULL");
   console.log(`${rows.length} unieke producttitels gevonden.`);
 
-  const existing = await getExistingBrandNames();
+  // Vergelijk met first_word (niet name): name kan handmatig hernoemd zijn
+  // (bv. "Pioneer" -> "Pioneer DJ"), first_word blijft het geëxtraheerde woord.
+  const existing = await getExistingFirstWords();
   const newBrands = new Set();
   let skipped = 0;
 
@@ -44,7 +46,7 @@ async function run() {
   }
 
   for (const brand of newBrands) {
-    await pool.query("INSERT INTO brand (name) VALUES (?)", [brand]);
+    await pool.query("INSERT INTO brand (name, first_word) VALUES (?, ?)", [brand, brand]);
     existing.add(brand.toLowerCase());
   }
 
