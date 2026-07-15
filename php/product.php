@@ -54,7 +54,7 @@ $listingsSql = "
         FROM bstock_product_price
         GROUP BY bstock_product_id
     ) pr ON pr.bstock_product_id = bp.id
-    WHERE bp.product_id = ?
+    WHERE bp.product_id = ? AND bp.ignored = 0
     ORDER BY bp.created DESC
 ";
 
@@ -63,6 +63,18 @@ $listingsStmt->bind_param('i', $productId);
 $listingsStmt->execute();
 $listings = $listingsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $listingsStmt->close();
+
+$suppliersStmt = $mysqli->prepare(
+    'SELECT s.name AS supplier_name, ps.url
+     FROM product_x_supplier ps
+     JOIN supplier s ON s.id = ps.supplier_id
+     WHERE ps.product_id = ?
+     ORDER BY s.name ASC'
+);
+$suppliersStmt->bind_param('i', $productId);
+$suppliersStmt->execute();
+$suppliers = $suppliersStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$suppliersStmt->close();
 
 $mysqli->close();
 
@@ -124,6 +136,17 @@ $mysqli->close();
     </p>
     <p class="meta">EAN: <?= $product['ean'] !== null ? htmlspecialchars($product['ean']) : '-' ?></p>
     <p class="meta">Product aangemaakt: <?= htmlspecialchars($product['created']) ?></p>
+
+    <h2>Leveranciers</h2>
+    <?php if (empty($suppliers)): ?>
+        <p>Geen leveranciers gevonden voor dit product.</p>
+    <?php else: ?>
+        <p class="meta">
+            <?php foreach ($suppliers as $i => $supplier): ?>
+                <?= $i > 0 ? ' - ' : '' ?><a href="<?= htmlspecialchars($supplier['url']) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($supplier['supplier_name']) ?> &#8599;</a>
+            <?php endforeach; ?>
+        </p>
+    <?php endif; ?>
 
     <h2>B-stock listings (<?= count($listings) ?>)</h2>
     <table>

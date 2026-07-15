@@ -13,7 +13,7 @@ if (!$brandId) {
 
 $mysqli = get_db_connection();
 
-$brandStmt = $mysqli->prepare('SELECT id, name, weight FROM brand WHERE id = ?');
+$brandStmt = $mysqli->prepare('SELECT id, name, weight, ignored FROM brand WHERE id = ?');
 $brandStmt->bind_param('i', $brandId);
 $brandStmt->execute();
 $brand = $brandStmt->get_result()->fetch_assoc();
@@ -59,7 +59,7 @@ $products = $productsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $productsStmt->close();
 
 $allProductsStmt = $mysqli->prepare(
-    'SELECT id, name, ean, archived, created FROM product WHERE brand_id = ? ORDER BY name ASC'
+    'SELECT id, name, ean, archived, created FROM product WHERE brand_id = ? AND ignored = 0 ORDER BY name ASC'
 );
 $allProductsStmt->bind_param('i', $brandId);
 $allProductsStmt->execute();
@@ -106,11 +106,25 @@ $mysqli->close();
         a {
             color: #0a4d92;
         }
+        .meta {
+            margin: 0.2rem 0;
+        }
     </style>
 </head>
 <body>
     <p><a href="index.php">&larr; Terug naar overzicht</a></p>
     <h1><?= htmlspecialchars($brand['name']) ?> (gewicht: <?= htmlspecialchars((string) $brand['weight']) ?>)</h1>
+
+    <p class="meta">
+        Genegeerd: <?= $brand['ignored'] ? 'Ja' : 'Nee' ?>
+        <?php if (!$brand['ignored']): ?>
+            <form method="post" action="ignore_brand.php" style="display:inline;">
+                <input type="hidden" name="id" value="<?= (int) $brand['id'] ?>">
+                <input type="hidden" name="redirect" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php') ?>">
+                <button type="submit" onclick="return confirm('Dit merk negeren?');">Negeren</button>
+            </form>
+        <?php endif; ?>
+    </p>
 
     <h2>Bstock producten</h2>
     <table>
@@ -145,20 +159,35 @@ $mysqli->close();
                 <th>EAN</th>
                 <th>Gearchiveerd</th>
                 <th>Aangemaakt</th>
+                <th>Actie</th>
             </tr>
         </thead>
         <tbody>
             <?php if (empty($allProducts)): ?>
-                <tr><td colspan="4">Geen producten gevonden voor dit merk.</td></tr>
+                <tr><td colspan="5">Geen producten gevonden voor dit merk.</td></tr>
             <?php else: foreach ($allProducts as $row): ?>
                 <tr>
                     <td><a href="product.php?id=<?= (int) $row['id'] ?>"><?= htmlspecialchars($row['name']) ?></a></td>
                     <td><?= $row['ean'] !== null ? htmlspecialchars($row['ean']) : '-' ?></td>
                     <td><?= $row['archived'] ? 'Ja' : 'Nee' ?></td>
                     <td><?= htmlspecialchars($row['created']) ?></td>
+                    <td>
+                        <form method="post" action="ignore_product.php" style="margin:0;">
+                            <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
+                            <input type="hidden" name="redirect" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php') ?>">
+                            <button type="submit" onclick="return confirm('Dit product negeren?');">Negeren</button>
+                        </form>
+                    </td>
                 </tr>
             <?php endforeach; endif; ?>
         </tbody>
     </table>
+
+    <h2>Merk hernoemen</h2>
+    <form method="post" action="update_brand_name.php">
+        <input type="hidden" name="id" value="<?= (int) $brand['id'] ?>">
+        <input type="text" name="name" value="<?= htmlspecialchars($brand['name']) ?>" required>
+        <button type="submit">Opslaan</button>
+    </form>
 </body>
 </html>

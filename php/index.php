@@ -10,9 +10,9 @@ $brandListSql = "
     SELECT b.id, b.name, b.weight, COUNT(p.id) AS product_count
     FROM brand b
     LEFT JOIN bstock_product p ON p.brand_id = b.id AND p.archived = 0 AND p.ignored = 0
+    WHERE b.ignored = 0
     GROUP BY b.id, b.name, b.weight
     ORDER BY b.weight ASC, b.name ASC
-    LIMIT 20
 ";
 
 // Meest recente prijs per product
@@ -53,7 +53,7 @@ $lightestProductsSql = "
     JOIN brand b ON b.id = p.brand_id
     $latestPriceJoin
     $priceRangeJoin
-    WHERE p.archived = 0 AND p.ignored = 0
+    WHERE p.archived = 0 AND p.ignored = 0 AND b.ignored = 0
     ORDER BY b.weight ASC
     LIMIT 50
 ";
@@ -65,6 +65,7 @@ $biggestDiscountsSql = "
     $latestPriceJoin
     $priceRangeJoin
     WHERE p.archived = 0 AND p.ignored = 0
+      AND (b.id IS NULL OR b.ignored = 0)
       AND (b.weight IS NULL OR b.weight < 10000)
     ORDER BY price_diff DESC
     LIMIT 50
@@ -77,6 +78,7 @@ $recentProductsSql = "
     $latestPriceJoin
     $priceRangeJoin
     WHERE p.archived = 0 AND p.ignored = 0
+      AND (b.id IS NULL OR b.ignored = 0)
     ORDER BY p.created DESC
     LIMIT 50
 ";
@@ -135,7 +137,7 @@ $mysqli->close();
 <body>
     <h1>Bax B-Stock overzicht</h1>
 
-    <h2>20 merken met het laagste gewicht</h2>
+    <h2>Merken</h2>
     <p class="brand-list">
         <?php if (empty($brandList)): ?>
             Geen merken gevonden.
