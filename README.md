@@ -13,7 +13,8 @@ Kopieer `.env.example` naar `.env` en vul de databasegegevens in.
 
 ## Gebruik
 ```bash
-node bax.js b-stock && node brands.js && node link_brands.js && node archive_products.js
+node bax.js b-stock && node brands.js && node link_brands.js && node archive_products.js && nod
+e link_products.js
 ```
 
 ```bash

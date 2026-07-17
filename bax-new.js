@@ -144,6 +144,7 @@ async function saveProducts(products, brandCache) {
   let linksCreated = 0;
   let linksUpdated = 0;
   let skippedUnknownBrand = 0;
+  let failed = 0;
 
   for (const prod of products) {
     const brandId = await getBrandId(prod.brand, brandCache);
@@ -152,17 +153,25 @@ async function saveProducts(products, brandCache) {
       continue;
     }
 
-    const name = cleanName(prod.name);
-    const { id: productId, created } = await getOrCreateProductId(brandId, name);
-    if (created) productsCreated += 1;
+    try {
+      const name = cleanName(prod.name);
+      const { id: productId, created } = await getOrCreateProductId(brandId, name);
+      if (created) productsCreated += 1;
 
-    const linkResult = await upsertSupplierLink(productId, prod.supplierProductId, prod.url);
-    if (linkResult === "created") linksCreated += 1;
-    if (linkResult === "updated") linksUpdated += 1;
+      const linkResult = await upsertSupplierLink(productId, prod.supplierProductId, prod.url);
+      if (linkResult === "created") linksCreated += 1;
+      if (linkResult === "updated") linksUpdated += 1;
+    } catch (error) {
+      failed += 1;
+      console.error(`  ⚠ Fout bij opslaan van "${prod.name}": ${error.message}`);
+    }
   }
 
   if (skippedUnknownBrand > 0) {
     console.log(`  ⚠ ${skippedUnknownBrand} product(en) overgeslagen: onbekend merk.`);
+  }
+  if (failed > 0) {
+    console.log(`  ⚠ ${failed} product(en) overgeslagen wegens een fout bij het wegschrijven.`);
   }
 
   return { productsCreated, linksCreated, linksUpdated };

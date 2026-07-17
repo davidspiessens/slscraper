@@ -189,5 +189,12 @@ $mysqli->close();
         <input type="text" name="name" value="<?= htmlspecialchars($brand['name']) ?>" required>
         <button type="submit">Opslaan</button>
     </form>
+
+    <h2>Gewicht aanpassen</h2>
+    <form method="post" action="update_brand_weight.php">
+        <input type="hidden" name="id" value="<?= (int) $brand['id'] ?>">
+        <input type="number" name="weight" value="<?= (int) $brand['weight'] ?>" required>
+        <button type="submit">Opslaan</button>
+    </form>
 </body>
 </html>

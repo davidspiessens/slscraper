@@ -172,5 +172,12 @@ $mysqli->close();
             <?php else: foreach ($listings as $row): render_product_row($row); endforeach; endif; ?>
         </tbody>
     </table>
+
+    <h2>Naam bewerken</h2>
+    <form method="post" action="update_product_name.php">
+        <input type="hidden" name="id" value="<?= (int) $product['id'] ?>">
+        <input type="text" name="name" value="<?= htmlspecialchars($product['name']) ?>" size="100" required>
+        <button type="submit">Opslaan</button>
+    </form>
 </body>
 </html>

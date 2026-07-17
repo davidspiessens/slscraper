@@ -1,6 +1,9 @@
 /**
  * Koppelt bstock_product.product_id aan het juiste product, op basis van
- * brand_id + naam (titel zonder "(B-Stock)").
+ * brand_id + naam (titel zonder "(B-Stock)"). De bstock-titel mag langer
+ * zijn dan de productnaam (bv. met extra omschrijving erachter) - in dat
+ * geval wordt de langst matchende productnaam gebruikt die de titel als
+ * prefix heeft, op een woordgrens.
  *
  * Uitvoeren:
  *     node link_products.js
@@ -15,9 +18,34 @@ function cleanName(title) {
     .trim();
 }
 
+/** Zoekt het product waarvan de naam een prefix is van `name`, op een woordgrens. */
+function findPrefixMatch(name, candidates) {
+  const nameLower = name.toLowerCase();
+
+  return candidates.find((p) => {
+    const prefix = p.name.toLowerCase();
+    if (!nameLower.startsWith(prefix)) return false;
+    const nextChar = nameLower[prefix.length];
+    return nextChar === undefined || /\s/.test(nextChar);
+  });
+}
+
 async function run() {
   const [products] = await pool.query("SELECT id, brand_id, name FROM product");
   const productIdByKey = new Map(products.map((p) => [`${p.brand_id}::${p.name}`, p.id]));
+
+  // Per merk gesorteerd op naam-lengte (langste eerst), zodat een specifiekere
+  // productnaam voorrang krijgt op een kortere die toevallig ook een prefix is.
+  const productsByBrand = new Map();
+  for (const p of products) {
+    if (!productsByBrand.has(p.brand_id)) {
+      productsByBrand.set(p.brand_id, []);
+    }
+    productsByBrand.get(p.brand_id).push(p);
+  }
+  for (const candidates of productsByBrand.values()) {
+    candidates.sort((a, b) => b.name.length - a.name.length);
+  }
 
   const [bstockProducts] = await pool.query(
     "SELECT id, brand_id, title FROM bstock_product WHERE brand_id IS NOT NULL AND (product_id IS NULL OR product_id = 0)"
@@ -29,8 +57,15 @@ async function run() {
   let skipped = 0;
 
   for (const bp of bstockProducts) {
-    const key = `${bp.brand_id}::${cleanName(bp.title)}`;
-    const productId = productIdByKey.get(key);
+    const name = cleanName(bp.title);
+    const key = `${bp.brand_id}::${name}`;
+
+    let productId = productIdByKey.get(key);
+
+    if (!productId) {
+      const match = findPrefixMatch(name, productsByBrand.get(bp.brand_id) || []);
+      if (match) productId = match.id;
+    }
 
     if (!productId) {
       skipped += 1;
