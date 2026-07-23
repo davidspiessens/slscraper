@@ -25,7 +25,7 @@ if (!$brand) {
 }
 
 $productsSql = "
-    SELECT p.id, p.title, p.url, p.created AS product_created, p.product_id,
+    SELECT p.id, p.title, p.url, p.created AS product_created, p.product_id, p.archived,
            b.id AS brand_id, b.name AS brand_name, b.weight,
            lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
            (lp.priceOriginal - lp.priceNow) AS price_diff,
@@ -48,8 +48,8 @@ $productsSql = "
         FROM bstock_product_price
         GROUP BY bstock_product_id
     ) pr ON pr.bstock_product_id = p.id
-    WHERE p.brand_id = ? AND p.archived = 0 AND p.ignored = 0
-    ORDER BY p.title ASC
+    WHERE p.brand_id = ? AND p.ignored = 0
+    ORDER BY p.archived ASC, p.title ASC
 ";
 
 $productsStmt = $mysqli->prepare($productsSql);

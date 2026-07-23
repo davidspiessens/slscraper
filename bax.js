@@ -3,13 +3,20 @@ const pool = require("./db");
 
 const keyword = process.argv[2];
 if (!keyword) {
-  console.error("Gebruik: node bax.js <keyword>");
-  console.error('Voorbeeld: node bax.js "b-stock+pioneer"');
+  console.error("Gebruik: node bax.js <keyword> [startpagina]");
+  console.error('Voorbeeld: node bax.js "b-stock+pioneer" 3');
+  process.exit(1);
+}
+
+const startPage = process.argv[3] ? parseInt(process.argv[3], 10) : 1;
+if (!Number.isInteger(startPage) || startPage < 1) {
+  console.error("Startpagina moet een geheel getal groter dan of gelijk aan 1 zijn.");
   process.exit(1);
 }
 
 const BASE_URL = "https://www.bax-shop.be";
 const SEARCH_URL = `${BASE_URL}/nl/hele-assortiment?keyword=${encodeURIComponent(keyword)}`;
+const START_URL = startPage > 1 ? `${SEARCH_URL}&p=${startPage}` : SEARCH_URL;
 const SUPPLIER = 1; // bax-shop.be
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -139,18 +146,18 @@ async function getNextPageUrl(page) {
 }
 
 async function scrape() {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext({
     userAgent:
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-      "AppleWebKit/537.36 (KHTML, like Gecko) " +
-      "Chrome/124.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" +
+      "AppleWebKit/537.36 (KHTML, like Gecko)" +
+      "Chrome/150.0.0.0 Safari/537.36",
     locale: "nl-BE",
   });
   const page = await context.newPage();
 
-  let currentUrl = SEARCH_URL;
-  let pageNum = 1;
+  let currentUrl = START_URL;
+  let pageNum = startPage;
   let totalFound = 0;
   let totalSaved = 0;
   const seen = new Set();
@@ -158,6 +165,11 @@ async function scrape() {
   while (currentUrl) {
     console.log(`Pagina ${pageNum}: ${currentUrl}`);
     await page.goto(currentUrl, { waitUntil: "networkidle", timeout: 30000 });
+
+    // Accept cookies - to be tested
+    // if (pageNum === startPage) {
+    //   await page.locator('#AcceptReload').click();
+    // }
 
     try {
       await page.waitForSelector(

@@ -31,7 +31,7 @@ if (!$product) {
 }
 
 $listingsSql = "
-    SELECT bp.id, bp.title, bp.url, bp.created AS product_created, bp.product_id, bp.ignored,
+    SELECT bp.id, bp.title, bp.url, bp.created AS product_created, bp.product_id, bp.ignored, bp.archived,
            b.id AS brand_id, b.name AS brand_name, b.weight,
            lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
            (lp.priceOriginal - lp.priceNow) AS price_diff,
@@ -63,6 +63,41 @@ $listingsStmt->bind_param('i', $productId);
 $listingsStmt->execute();
 $listings = $listingsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $listingsStmt->close();
+
+$priceSeries = [];
+$listingIds = array_column($listings, 'id');
+if (!empty($listingIds)) {
+    $placeholders = implode(',', array_fill(0, count($listingIds), '?'));
+    $types = str_repeat('i', count($listingIds));
+
+    $historyStmt = $mysqli->prepare(
+        "SELECT bstock_product_id, priceNow, created
+         FROM bstock_product_price
+         WHERE bstock_product_id IN ($placeholders)
+         ORDER BY created ASC, id ASC"
+    );
+    $historyStmt->bind_param($types, ...$listingIds);
+    $historyStmt->execute();
+    $priceHistoryRows = $historyStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $historyStmt->close();
+
+    $pointsByListing = [];
+    foreach ($priceHistoryRows as $row) {
+        $pointsByListing[$row['bstock_product_id']][] = [
+            't' => strtotime($row['created']),
+            'price' => (float) $row['priceNow'],
+        ];
+    }
+
+    foreach ($pointsByListing as $listingId => $points) {
+        $priceSeries[] = ['label' => "#$listingId", 'points' => $points];
+    }
+}
+$listingsChart = render_multi_price_chart($priceSeries);
+
+$allPrices = array_column(array_merge(...array_column($priceSeries, 'points')), 'price');
+$minPrice = empty($allPrices) ? null : (string) min($allPrices);
+$maxPrice = empty($allPrices) ? null : (string) max($allPrices);
 
 $suppliersStmt = $mysqli->prepare(
     'SELECT s.name AS supplier_name, ps.url
@@ -136,6 +171,7 @@ $mysqli->close();
     </p>
     <p class="meta">EAN: <?= $product['ean'] !== null ? htmlspecialchars($product['ean']) : '-' ?></p>
     <p class="meta">Product aangemaakt: <?= htmlspecialchars($product['created']) ?></p>
+    <p class="meta">Laagste prijs: <?= euro($minPrice) ?> &nbsp;|&nbsp; Hoogste prijs: <?= euro($maxPrice) ?></p>
 
     <h2>Leveranciers</h2>
     <?php if (empty($suppliers)): ?>
@@ -172,6 +208,9 @@ $mysqli->close();
             <?php else: foreach ($listings as $row): render_product_row($row); endforeach; endif; ?>
         </tbody>
     </table>
+
+    <h2>Prijsverloop (alle gekoppelde B-stock listings)</h2>
+    <?= $listingsChart ?>
 
     <h2>Naam bewerken</h2>
     <form method="post" action="update_product_name.php">

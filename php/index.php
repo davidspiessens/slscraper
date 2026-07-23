@@ -137,7 +137,8 @@ $mysqli->close();
 <body>
     <h1>Bax B-Stock overzicht</h1>
 
-    <h2>Merken</h2>
+    <h2>Merken <small>(<a href="manage_brands.php">Beheer merken</a>)</small></h2>
+    
     <p class="brand-list">
         <?php if (empty($brandList)): ?>
             Geen merken gevonden.
