@@ -1,6 +1,7 @@
 /**
  * Koppelt bstock_product.brand_id aan de juiste brand, op basis van
- * brand.first_word (het eerste woord na "(B-Stock)" in de producttitel).
+ * brand.first_word (het eerste woord na een eventueel B-stock-voorvoegsel
+ * in de producttitel — titelopbouw verschilt per leverancier).
  *
  * Uitvoeren:
  *     node link_brands.js
@@ -8,10 +9,15 @@
 
 const pool = require("./db");
 
-const BRAND_REGEX = /\(B-Stock\)\s+(\S+)/i;
+// Strip een optioneel B-stock-voorvoegsel in eender welke vorm:
+// bax-shop: "(B-Stock) ", progear: "B-stock: ". Titels zonder voorvoegsel
+// (bv. sommige progear-artikels) blijven ongewijzigd.
+const BSTOCK_PREFIX_REGEX = /^\(?b-stock\)?:?\s*/i;
+const FIRST_WORD_REGEX = /^(\S+)/;
 
 function extractFirstWord(title) {
-  const match = title.match(BRAND_REGEX);
+  const withoutPrefix = title.replace(BSTOCK_PREFIX_REGEX, "");
+  const match = withoutPrefix.match(FIRST_WORD_REGEX);
   return match ? match[1] : null;
 }
 
@@ -37,7 +43,7 @@ async function run() {
 
   console.log(`${brands.length} merk(en), ${products.length} product(en) gevonden.`);
 
-  // Groepeer producten per (lowercase) eerste woord na "(B-Stock)"
+  // Groepeer producten per (lowercase) eerste woord na een eventueel B-stock-voorvoegsel
   const productIdsByWord = new Map();
   for (const product of products) {
     const word = extractFirstWord(product.title);

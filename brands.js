@@ -1,5 +1,6 @@
 /**
- * Extraheert merknamen uit bstock_product.title (eerste woord na "(B-Stock)")
+ * Extraheert merknamen uit bstock_product.title (eerste woord, na een eventueel
+ * "(B-Stock)" of "B-stock:" voorvoegsel — titelopbouw verschilt per leverancier)
  * en slaat nieuwe, unieke merken op in de tabel `brand`.
  *
  * Uitvoeren:
@@ -8,10 +9,15 @@
 
 const pool = require("./db");
 
-const BRAND_REGEX = /\(B-Stock\)\s+(\S+)/i;
+// Strip een optioneel B-stock-voorvoegsel in eender welke vorm:
+// bax-shop: "(B-Stock) ", progear: "B-stock: ". Titels zonder voorvoegsel
+// (bv. sommige progear-artikels) blijven ongewijzigd.
+const BSTOCK_PREFIX_REGEX = /^\(?b-stock\)?:?\s*/i;
+const FIRST_WORD_REGEX = /^(\S+)/;
 
 function extractBrand(title) {
-  const match = title.match(BRAND_REGEX);
+  const withoutPrefix = title.replace(BSTOCK_PREFIX_REGEX, "");
+  const match = withoutPrefix.match(FIRST_WORD_REGEX);
   return match ? match[1] : null;
 }
 
@@ -42,7 +48,7 @@ async function run() {
   }
 
   if (skipped > 0) {
-    console.log(`  ⚠ ${skipped} titel(s) overgeslagen: geen merk gevonden na "(B-Stock)".`);
+    console.log(`  ⚠ ${skipped} titel(s) overgeslagen: geen merk gevonden.`);
   }
 
   for (const brand of newBrands) {

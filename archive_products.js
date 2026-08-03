@@ -8,7 +8,11 @@
 
 const pool = require("./db");
 
-async function run() {
+async function archive() {
+  await pool.query(`
+    UPDATE bstock_product SET archived = FALSE
+  `);
+
   const [result] = await pool.query(`
     UPDATE bstock_product p
     LEFT JOIN (
@@ -26,7 +30,7 @@ async function run() {
   await pool.end();
 }
 
-run().catch((err) => {
+archive().catch((err) => {
   console.error(err);
   process.exit(1);
 });
