@@ -100,6 +100,9 @@ $mysqli->close();
         tr:nth-child(even) {
             background: #fafafa;
         }
+        tr:hover {
+            background: #eaf2ff !important;
+        }
         .num {
             text-align: right;
         }
@@ -112,6 +115,7 @@ $mysqli->close();
     </style>
 </head>
 <body>
+    <?= render_vat_toggle() ?>
     <p><a href="index.php">&larr; Terug naar overzicht</a></p>
     <h1><?= htmlspecialchars($brand['name']) ?> (gewicht: <?= htmlspecialchars((string) $brand['weight']) ?>)</h1>
 
@@ -121,7 +125,7 @@ $mysqli->close();
             <form method="post" action="ignore_brand.php" style="display:inline;">
                 <input type="hidden" name="id" value="<?= (int) $brand['id'] ?>">
                 <input type="hidden" name="redirect" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php') ?>">
-                <button type="submit" onclick="return confirm('Dit merk negeren?');">Negeren</button>
+                <button type="submit" title="Negeren" onclick="return confirm('Dit merk negeren?');">&#128683;</button>
             </form>
         <?php endif; ?>
     </p>
@@ -147,7 +151,7 @@ $mysqli->close();
         <tbody>
             <?php if (empty($products)): ?>
                 <tr><td colspan="12">Geen producten gevonden voor dit merk.</td></tr>
-            <?php else: foreach ($products as $row): render_product_row($row); endforeach; endif; ?>
+            <?php else: foreach ($products as $row): render_product_row($row, true); endforeach; endif; ?>
         </tbody>
     </table>
 
@@ -175,7 +179,7 @@ $mysqli->close();
                         <form method="post" action="ignore_product.php" style="margin:0;">
                             <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
                             <input type="hidden" name="redirect" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php') ?>">
-                            <button type="submit" onclick="return confirm('Dit product negeren?');">Negeren</button>
+                            <button type="submit" title="Negeren" onclick="return confirm('Dit product negeren?');">&#128683;</button>
                         </form>
                     </td>
                 </tr>
@@ -187,14 +191,14 @@ $mysqli->close();
     <form method="post" action="update_brand_name.php">
         <input type="hidden" name="id" value="<?= (int) $brand['id'] ?>">
         <input type="text" name="name" value="<?= htmlspecialchars($brand['name']) ?>" required>
-        <button type="submit">Opslaan</button>
+        <button type="submit" title="Opslaan">&#128190;</button>
     </form>
 
     <h2>Gewicht aanpassen</h2>
     <form method="post" action="update_brand_weight.php">
         <input type="hidden" name="id" value="<?= (int) $brand['id'] ?>">
         <input type="number" name="weight" value="<?= (int) $brand['weight'] ?>" required>
-        <button type="submit">Opslaan</button>
+        <button type="submit" title="Opslaan">&#128190;</button>
     </form>
 </body>
 </html>

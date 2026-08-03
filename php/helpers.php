@@ -30,9 +30,57 @@ function get_db_connection(): mysqli
     return $mysqli;
 }
 
+const VAT_RATE = 1.21;
+const VAT_COOKIE = 'vat_mode';
+
+// Zelfde opkuislogica als create_products.js/link_products.js: bax "(B-Stock) ",
+// progear "B-stock: " voorvoegsel, xlrpro " - [SECOND-HAND]"/" [SECOND-HAND]"
+// achtervoegsel, tekst tussen haakjes en tekst na een liggend streepje
+// omringd door spaties. Andere leveranciers hebben geen markering.
+const BSTOCK_PREFIX_REGEX = '/^\(?b-stock\)?:?\s*/i';
+const SECOND_HAND_SUFFIX_REGEX = '/\s*-?\s*\[second-hand\]\s*$/i';
+const PAREN_REGEX = '/\s*\([^)]*\)/';
+const DASH_SUFFIX_REGEX = '/\s+[-–—]\s+.*$/u';
+
+function clean_product_name(string $title): string
+{
+    $name = preg_replace(BSTOCK_PREFIX_REGEX, '', $title);
+    $name = preg_replace(PAREN_REGEX, '', $name);
+    $name = preg_replace(DASH_SUFFIX_REGEX, '', $name);
+    $name = preg_replace(SECOND_HAND_SUFFIX_REGEX, '', $name);
+    $name = preg_replace('/\s+/', ' ', $name);
+    return trim($name);
+}
+
+/** Geeft de huidige BTW-vermenigvuldigingsfactor terug (1.21 bij incl., anders 1.0). Alle prijzen in de DB staan excl. BTW. */
+function get_vat_multiplier(): float
+{
+    return (($_COOKIE[VAT_COOKIE] ?? 'excl') === 'incl') ? VAT_RATE : 1.0;
+}
+
 function euro(?string $value): string
 {
-    return $value === null ? '-' : '€ ' . number_format((float) $value, 2, ',', '.');
+    if ($value === null) {
+        return '-';
+    }
+    return '€ ' . number_format((float) $value * get_vat_multiplier(), 2, ',', '.');
+}
+
+/** Rendert de incl./excl. BTW-toggle. Te plaatsen bovenaan elke pagina. */
+function render_vat_toggle(): string
+{
+    $isIncl = get_vat_multiplier() > 1.0;
+    $redirect = urlencode($_SERVER['REQUEST_URI'] ?? 'index.php');
+    ob_start();
+    ?>
+    <p class="meta">
+        Prijzen:
+        <a href="toggle_vat.php?mode=excl&redirect=<?= $redirect ?>"<?= !$isIncl ? ' style="font-weight:bold;"' : '' ?>>Excl. BTW</a>
+        &nbsp;|&nbsp;
+        <a href="toggle_vat.php?mode=incl&redirect=<?= $redirect ?>"<?= $isIncl ? ' style="font-weight:bold;"' : '' ?>>Incl. BTW</a>
+    </p>
+    <?php
+    return ob_get_clean();
 }
 
 /** Rendert een SVG line-chart van de prijshistoriek (chronologisch, oud -> nieuw). */
@@ -201,10 +249,11 @@ function render_multi_price_chart(array $series): string
 }
 
 /** Rendert een <tr> met de kolommen die alle producttabellen gemeen hebben. */
-function render_product_row(array $row): void
+function render_product_row(array $row, bool $showGenerateAction = false): void
 {
     $redirectTarget = htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php');
     $rowStyle = (!empty($row['ignored']) || !empty($row['archived'])) ? ' style="background-color: #f8d7da;"' : '';
+    $urlHost = preg_replace('/^www\./', '', (string) parse_url($row['url'], PHP_URL_HOST));
     ?>
     <tr<?= $rowStyle ?>>
         <td>
@@ -212,7 +261,7 @@ function render_product_row(array $row): void
             <?php if (!empty($row['product_id'])): ?>
                 &nbsp;<a href="product.php?id=<?= (int) $row['product_id'] ?>" title="Bekijk productoverzicht">&#128230;</a>
             <?php endif; ?>
-            &nbsp;<a href="<?= htmlspecialchars($row['url']) ?>" target="_blank" rel="noopener" title="Bekijk op bax-shop.be">&#8599;</a>
+            &nbsp;<a href="<?= htmlspecialchars($row['url']) ?>" target="_blank" rel="noopener" title="Bekijk op <?= htmlspecialchars($urlHost) ?>">&#8599;</a>
         </td>
         <td>
             <?php if ($row['brand_id']): ?>
@@ -235,8 +284,15 @@ function render_product_row(array $row): void
             <form method="post" action="ignore_bstock_product.php" style="margin:0;">
                 <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
                 <input type="hidden" name="redirect" value="<?= $redirectTarget ?>">
-                <button type="submit" onclick="return confirm('Dit product negeren?');">Negeren</button>
+                <button type="submit" title="Negeren" onclick="return confirm('Dit product negeren?');">&#128683;</button>
             </form>
+            <?php if ($showGenerateAction && empty($row['product_id']) && !empty($row['brand_id'])): ?>
+                <form method="post" action="generate_product.php" style="margin:0.3rem 0 0 0;">
+                    <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
+                    <input type="hidden" name="redirect" value="<?= $redirectTarget ?>">
+                    <button type="submit" title="Genereer product">&#128279;</button>
+                </form>
+            <?php endif; ?>
         </td>
     </tr>
     <?php

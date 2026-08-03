@@ -11,9 +11,22 @@
 
 const pool = require("./db");
 
+// Voorvoegsel: bax "(B-Stock) ", progear "B-stock: ". Titels zonder
+// voorvoegsel (xlrpro, aedsecondhand, soundsale) blijven ongewijzigd.
+const BSTOCK_PREFIX_REGEX = /^\(?b-stock\)?:?\s*/i;
+// Achtervoegsel: xlrpro "... - [SECOND-HAND]" of "... [SECOND-HAND]".
+const SECOND_HAND_SUFFIX_REGEX = /\s*-?\s*\[second-hand\]\s*$/i;
+// Tekst tussen haakjes, overal in de titel (bv. "(8)", "(EXTRA LARGE)").
+const PAREN_REGEX = /\s*\([^)]*\)/g;
+// Tekst na een liggend streepje omringd door spaties (bv. "12XT – set of 2").
+const DASH_SUFFIX_REGEX = /\s+[-–—]\s+.*$/;
+
 function cleanName(title) {
   return title
-    .replace(/\(b-stock\)/gi, "")
+    .replace(BSTOCK_PREFIX_REGEX, "")
+    .replace(PAREN_REGEX, "")
+    .replace(DASH_SUFFIX_REGEX, "")
+    .replace(SECOND_HAND_SUFFIX_REGEX, "")
     .replace(/\s+/g, " ")
     .trim();
 }

@@ -82,6 +82,9 @@ $historyDesc = array_reverse($history);
         tr:nth-child(even) {
             background: #fafafa;
         }
+        tr:hover {
+            background: #eaf2ff !important;
+        }
         .num {
             text-align: right;
         }
@@ -94,6 +97,7 @@ $historyDesc = array_reverse($history);
     </style>
 </head>
 <body>
+    <?= render_vat_toggle() ?>
     <p><a href="index.php">&larr; Terug naar overzicht</a></p>
     <h1><?= htmlspecialchars($product['title']) ?></h1>
 
@@ -107,7 +111,8 @@ $historyDesc = array_reverse($history);
         <?php endif; ?>
     </p>
     <p class="meta">Product aangemaakt: <?= htmlspecialchars($product['product_created']) ?></p>
-    <p class="meta"><a href="<?= htmlspecialchars($product['url']) ?>" target="_blank" rel="noopener">Bekijk op bax-shop.be &#8599;</a></p>
+    <?php $urlHost = preg_replace('/^www\./', '', (string) parse_url($product['url'], PHP_URL_HOST)); ?>
+    <p class="meta"><a href="<?= htmlspecialchars($product['url']) ?>" target="_blank" rel="noopener">Bekijk op <?= htmlspecialchars($urlHost) ?> &#8599;</a></p>
     <?php if ($product['product_id']): ?>
         <p class="meta"><a href="product.php?id=<?= (int) $product['product_id'] ?>">Bekijk productoverzicht &rarr;</a></p>
     <?php endif; ?>
@@ -117,7 +122,7 @@ $historyDesc = array_reverse($history);
             <form method="post" action="ignore_bstock_product.php" style="display:inline;">
                 <input type="hidden" name="id" value="<?= (int) $product['id'] ?>">
                 <input type="hidden" name="redirect" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php') ?>">
-                <button type="submit" onclick="return confirm('Dit product negeren?');">Negeren</button>
+                <button type="submit" title="Negeren" onclick="return confirm('Dit product negeren?');">&#128683;</button>
             </form>
         <?php endif; ?>
     </p>

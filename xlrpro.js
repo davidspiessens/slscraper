@@ -1,75 +1,70 @@
 const { chromium } = require("playwright");
 const pool = require("./db");
 
-const keyword = process.argv[2];
-if (!keyword) {
-  console.error("Gebruik: node bax.js <keyword> [startpagina]");
-  console.error('Voorbeeld: node bax.js "b-stock+pioneer" 3');
-  process.exit(1);
-}
-
-const startPage = process.argv[3] ? parseInt(process.argv[3], 10) : 1;
+const startPage = process.argv[2] ? parseInt(process.argv[2], 10) : 1;
 if (!Number.isInteger(startPage) || startPage < 1) {
+  console.error("Gebruik: node xlrpro.js [startpagina]");
   console.error("Startpagina moet een geheel getal groter dan of gelijk aan 1 zijn.");
   process.exit(1);
 }
 
 const BASE_URL = "https://www.xlrpro.eu";
-const SEARCH_URL = `${BASE_URL}/shop?tags=8&tags=36&tags=40`;
-const START_URL = startPage > 1 ? `${SEARCH_URL}/page/${startPage}` : SEARCH_URL;
-const SUPPLIER = 1; // bax-shop.be
+const QUERY = "tags=8&tags=36&tags=40";
+const SEARCH_URL = `${BASE_URL}/shop?${QUERY}`;
+const START_URL = startPage > 1 ? `${BASE_URL}/shop/page/${startPage}?${QUERY}` : SEARCH_URL;
+const SUPPLIER = 4; // XLR Pro
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const PRODUCT_CARD_SELECTOR =
-  '.result';
+const PRODUCT_CARD_SELECTOR = "td.oe_product";
 
 /** Haal alle productkaarten op de huidige pagina op. */
 async function getProductsOnPage(page) {
   return page.evaluate((cardSelector) => {
+    // Zet een Belgisch/Odoo-geformatteerd prijsgetal ("4.900,00") om naar een float.
+    // Moet binnen evaluate() gedefinieerd zijn: dit draait in de browsercontext,
+    // die geen toegang heeft tot buiten evaluate() gedefinieerde Node.js-functies.
+    function parseOdooPrice(text) {
+      if (!text) return null;
+      const normalized = text.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
+      const value = parseFloat(normalized);
+      return isNaN(value) ? null : value;
+    }
+
     const results = [];
     const cards = document.querySelectorAll(cardSelector);
 
     cards.forEach((card) => {
-      // --- Titel ---
-      const titleEl = card.querySelector(
-        '[data-test="product-title"], [class*="title"], [class*="name"], h2, h3'
-      );
-      const title = titleEl ? titleEl.innerText.trim() : null;
+      // --- Titel: merk + naam staan als aparte <span>'s in de titel-link ---
+      const titleLink = card.querySelector('h6.o_wsale_products_item_title a[itemprop="name"]');
+      const spans = titleLink ? titleLink.querySelectorAll("span") : [];
+      const brand = spans[0] ? spans[0].innerText.trim() : null;
+      const name = spans[1] ? spans[1].innerText.trim() : null;
+      const title = brand && name ? `${brand} ${name}` : name || brand;
 
       // --- URL ---
-      const linkEl = card.querySelector("a[href]");
-      const url = linkEl ? linkEl.href : null;
+      const url = titleLink ? titleLink.href : null;
 
-      // --- Normale prijs ---
-      const priceOriginalEl =
-        card.querySelector(
-          '.van-prijs'
-        );
+      // --- Product ID: stabiel data-attribuut, geen URL-parsing nodig ---
+      const idEl = card.querySelector("[data-product-template-id]");
+      const id = idEl ? idEl.getAttribute("data-product-template-id") : null;
 
-      let priceOriginal = priceOriginalEl ? parseFloat(priceOriginalEl.innerText.trim().replace('.','').replace('€ ', '').replace('-', '00').replace(',','.')) : null;
-        
-      // --- Prijs nu
-      const priceNowEl =
-        card.querySelector(
-          '.voor-prijs'
-        );
+      // --- Prijs nu: schone waarde via itemprop="price" (bv. "290.0") ---
+      const priceNowEl = card.querySelector('span[itemprop="price"]');
+      const priceNow = priceNowEl ? parseFloat(priceNowEl.innerText.trim()) : null;
 
-      const priceNow = priceNowEl ? parseFloat(priceNowEl.innerText.trim().replace('.','').replace('€ ', '').replace('-', '00').replace(',','.')) : null;
-
-      if (isNaN(priceOriginal)) priceOriginal = priceNow;
-
-      // --- Extra korting / badge ---
-      const discountEl = card.querySelector(
-        '.product-label'
+      // --- Normale prijs: enkel aanwezig bij korting, in <del><em> ---
+      const priceOriginalEl = card.querySelector(
+        'del em[data-oe-expression*="base_price"] .oe_currency_value'
       );
-      const discount = discountEl ? discountEl.innerText.trim() : null;
+      let priceOriginal = priceOriginalEl ? parseOdooPrice(priceOriginalEl.innerText) : null;
+      if (priceOriginal == null || isNaN(priceOriginal)) priceOriginal = priceNow;
 
-      // --- Product ID ---
-      const idMatch = url ? url.match(/\/product\/(\d+)\//) : null;
-      const id = idMatch ? idMatch[1] : null;
+      // --- Status/badge (bv. "Sold out") ---
+      const ribbonEl = card.querySelector(".o_ribbon");
+      const discount = ribbonEl ? ribbonEl.innerText.trim() || null : null;
 
-      if (title && title.indexOf('(B-Stock)') > -1) {
+      if (id && title && url) {
         results.push({ id, title, priceOriginal, priceNow, discount, url });
       }
     });
@@ -130,23 +125,22 @@ async function saveProducts(products) {
   return saved;
 }
 
-/** Geeft de URL van de volgende pagina, of null als er geen is. */
-async function getNextPageUrl(page) {
-  const nextHref = await page.evaluate(() => {
-    const btn = document.querySelector(
-      'a.next'
-    );
-    return btn ? btn.getAttribute("href") : null;
+/**
+ * Controleert of er een volgende pagina is. De site's eigen paginalinks laten
+ * "tags=36" en "tags=40" vallen (enkel "tags=8" blijft over), dus we bouwen de
+ * volgende URL zelf op met de volledige QUERY i.p.v. de href van de site te volgen.
+ */
+async function hasNextPage(page) {
+  return page.evaluate(() => {
+    const active = document.querySelector(".products_pager li.page-item.active");
+    if (!active) return false;
+    const next = active.nextElementSibling;
+    return !!next && !next.classList.contains("disabled");
   });
-
-  if (nextHref) {
-    return nextHref.startsWith("http") ? nextHref : BASE_URL + nextHref;
-  }
-  return null;
 }
 
 async function scrape() {
-  const browser = await chromium.launch({ headless: false });
+  const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     userAgent:
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" +
@@ -166,16 +160,8 @@ async function scrape() {
     console.log(`Pagina ${pageNum}: ${currentUrl}`);
     await page.goto(currentUrl, { waitUntil: "networkidle", timeout: 30000 });
 
-    // Accept cookies - to be tested
-    // if (pageNum === startPage) {
-    //   await page.locator('#AcceptReload').click();
-    // }
-
     try {
-      await page.waitForSelector(
-        '.result',
-        { timeout: 15000 }
-      );
+      await page.waitForSelector("td.oe_product", { timeout: 15000 });
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
       break;
@@ -198,9 +184,9 @@ async function scrape() {
     totalSaved += saved;
     console.log(`  → ${products.length} producten gevonden, ${saved} opgeslagen (totaal opgeslagen: ${totalSaved})`);
 
-    const nextUrl = await getNextPageUrl(page);
-    currentUrl = nextUrl && nextUrl !== currentUrl ? nextUrl : null;
+    const hasNext = await hasNextPage(page);
     pageNum += 1;
+    currentUrl = hasNext ? `${BASE_URL}/shop/page/${pageNum}?${QUERY}` : null;
 
     if (currentUrl) {
       console.log("  ⏳ 30s wachten voor volgende pagina...");

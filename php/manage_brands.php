@@ -42,6 +42,9 @@ $mysqli->close();
         tr:nth-child(even) {
             background: #fafafa;
         }
+        tr:hover {
+            background: #eaf2ff !important;
+        }
         a {
             color: #0a4d92;
         }
@@ -81,7 +84,7 @@ $mysqli->close();
                     <td><input type="checkbox" name="ignored" form="<?= $formId ?>" <?= $brand['ignored'] ? 'checked' : '' ?>></td>
                     <td>
                         <input type="hidden" name="id" form="<?= $formId ?>" value="<?= (int) $brand['id'] ?>">
-                        <button type="submit" form="<?= $formId ?>">Opslaan</button>
+                        <button type="submit" form="<?= $formId ?>" title="Opslaan">&#128190;</button>
                     </td>
                 </tr>
             <?php endforeach; endif; ?>

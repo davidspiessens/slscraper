@@ -18,6 +18,7 @@ const BASE_URL = "https://www.bax-shop.be";
 const SEARCH_URL = `${BASE_URL}/nl/hele-assortiment?keyword=${encodeURIComponent(keyword)}`;
 const START_URL = startPage > 1 ? `${SEARCH_URL}&p=${startPage}` : SEARCH_URL;
 const SUPPLIER = 1; // bax-shop.be
+const VAT_RATE = 1.21; // bax-shop.be toont prijzen incl. BTW, wij slaan excl. BTW op
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -109,13 +110,17 @@ async function saveProducts(products) {
       skipped += 1;
       continue;
     }
-    
+
     const productId = await getOrCreateProductId(prod);
+
+    // bax-shop.be toont prijzen incl. BTW, wij slaan excl. BTW op
+    const priceOriginalExclVat = Math.round((prod.priceOriginal / VAT_RATE) * 100) / 100;
+    const priceNowExclVat = Math.round((prod.priceNow / VAT_RATE) * 100) / 100;
 
     try {
       await pool.query(
         "INSERT INTO bstock_product_price (bstock_product_id, priceOriginal, priceNow, discount_label) VALUES (?, ?, ?, ?)",
-        [productId, prod.priceOriginal, prod.priceNow, prod.discount || ""]
+        [productId, priceOriginalExclVat, priceNowExclVat, prod.discount || ""]
       );
       saved += 1;
     } catch (error) {

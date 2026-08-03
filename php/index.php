@@ -126,6 +126,9 @@ $mysqli->close();
         tr:nth-child(even) {
             background: #fafafa;
         }
+        tr:hover {
+            background: #eaf2ff !important;
+        }
         .num {
             text-align: right;
         }
@@ -135,6 +138,7 @@ $mysqli->close();
     </style>
 </head>
 <body>
+    <?= render_vat_toggle() ?>
     <h1>Bax B-Stock overzicht</h1>
 
     <h2>Merken <small>(<a href="manage_brands.php">Beheer merken</a>)</small></h2>

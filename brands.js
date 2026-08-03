@@ -33,7 +33,10 @@ async function run() {
   // Vergelijk met first_word (niet name): name kan handmatig hernoemd zijn
   // (bv. "Pioneer" -> "Pioneer DJ"), first_word blijft het geëxtraheerde woord.
   const existing = await getExistingFirstWords();
-  const newBrands = new Set();
+  // Map i.p.v. Set: dedupliceren op lowercase key, want brand.name heeft een
+  // case-insensitive unique index (anders botsen bv. "APEX" en "Apex" binnen
+  // dezelfde run).
+  const newBrands = new Map();
   let skipped = 0;
 
   for (const { title } of rows) {
@@ -42,8 +45,9 @@ async function run() {
       skipped += 1;
       continue;
     }
-    if (!existing.has(brand.toLowerCase())) {
-      newBrands.add(brand);
+    const key = brand.toLowerCase();
+    if (!existing.has(key) && !newBrands.has(key)) {
+      newBrands.set(key, brand);
     }
   }
 
@@ -51,7 +55,7 @@ async function run() {
     console.log(`  ⚠ ${skipped} titel(s) overgeslagen: geen merk gevonden.`);
   }
 
-  for (const brand of newBrands) {
+  for (const brand of newBrands.values()) {
     await pool.query("INSERT INTO brand (name, first_word) VALUES (?, ?)", [brand, brand]);
     existing.add(brand.toLowerCase());
   }

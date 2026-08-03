@@ -145,6 +145,9 @@ $mysqli->close();
         tr:nth-child(even) {
             background: #fafafa;
         }
+        tr:hover {
+            background: #eaf2ff !important;
+        }
         .num {
             text-align: right;
         }
@@ -157,6 +160,7 @@ $mysqli->close();
     </style>
 </head>
 <body>
+    <?= render_vat_toggle() ?>
     <p><a href="index.php">&larr; Terug naar overzicht</a></p>
     <h1><?= htmlspecialchars($product['name']) ?></h1>
 
@@ -216,7 +220,7 @@ $mysqli->close();
     <form method="post" action="update_product_name.php">
         <input type="hidden" name="id" value="<?= (int) $product['id'] ?>">
         <input type="text" name="name" value="<?= htmlspecialchars($product['name']) ?>" size="100" required>
-        <button type="submit">Opslaan</button>
+        <button type="submit" title="Opslaan">&#128190;</button>
     </form>
 </body>
 </html>
