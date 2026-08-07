@@ -1,30 +1,37 @@
+/**
+ * Scrapet tweedehands producten van cuesale.com/shop/ en slaat ze op in de
+ * database. Standaard WooCommerce-paginering. Prijzen staan al excl. BTW op
+ * de site ("excl. vat"), dus geen omrekening nodig.
+ *
+ * Uitvoeren:
+ *     node cuesale.js [startpagina]
+ */
+
 const { chromium } = require("playwright");
 const pool = require("./db");
 
 const startPage = process.argv[2] ? parseInt(process.argv[2], 10) : 1;
 if (!Number.isInteger(startPage) || startPage < 1) {
-  console.error("Gebruik: node xlrpro.js [startpagina]");
+  console.error("Gebruik: node cuesale.js [startpagina]");
   console.error("Startpagina moet een geheel getal groter dan of gelijk aan 1 zijn.");
   process.exit(1);
 }
 
-const BASE_URL = "https://www.xlrpro.eu";
-const QUERY = "tags=8&tags=36&tags=40";
-const SEARCH_URL = `${BASE_URL}/shop?${QUERY}`;
-const START_URL = startPage > 1 ? `${BASE_URL}/shop/page/${startPage}?${QUERY}` : SEARCH_URL;
-const SUPPLIER = 4; // XLR Pro
+const BASE_URL = "https://cuesale.com";
+const QUERY = "per_page=36";
+const START_URL =
+  startPage > 1 ? `${BASE_URL}/shop/page/${startPage}/?${QUERY}` : `${BASE_URL}/shop/?${QUERY}`;
+const SUPPLIER = 11; // CueSale
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const PRODUCT_CARD_SELECTOR = "td.oe_product";
+const PRODUCT_CARD_SELECTOR = ".wd-product[data-id]";
 
 /** Haal alle productkaarten op de huidige pagina op. */
 async function getProductsOnPage(page) {
   return page.evaluate((cardSelector) => {
-    // Zet een Belgisch/Odoo-geformatteerd prijsgetal ("4.900,00") om naar een float.
-    // Moet binnen evaluate() gedefinieerd zijn: dit draait in de browsercontext,
-    // die geen toegang heeft tot buiten evaluate() gedefinieerde Node.js-functies.
-    function parseOdooPrice(text) {
+    // Zet een Euro-geformatteerd prijsgetal ("7.775,00") om naar een float.
+    function parsePrice(text) {
       if (!text) return null;
       const normalized = text.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
       const value = parseFloat(normalized);
@@ -35,34 +42,35 @@ async function getProductsOnPage(page) {
     const cards = document.querySelectorAll(cardSelector);
 
     cards.forEach((card) => {
-      // --- Titel: merk + naam staan als aparte <span>'s in de titel-link ---
-      const titleLink = card.querySelector('h6.o_wsale_products_item_title a[itemprop="name"]');
-      const spans = titleLink ? titleLink.querySelectorAll("span") : [];
-      const brand = spans[0] ? spans[0].innerText.trim() : null;
-      const name = spans[1] ? spans[1].innerText.trim() : null;
-      const title = brand && name ? `${brand} ${name}` : name || brand;
+      const id = card.getAttribute("data-id");
 
-      // --- URL ---
-      const url = titleLink ? titleLink.href : null;
+      // --- Titel en URL ---
+      const linkEl = card.querySelector("h3.wd-entities-title a");
+      const title = linkEl ? linkEl.innerText.trim() : null;
+      const url = linkEl ? linkEl.href : null;
 
-      // --- Product ID: stabiel data-attribuut, geen URL-parsing nodig ---
-      const idEl = card.querySelector("[data-product-template-id]");
-      const id = idEl ? idEl.getAttribute("data-product-template-id") : null;
+      // --- Prijzen: variabele producten tonen een prijsklasse ("€X – €Y",
+      // vanaf-prijs voor meerdere varianten), geen korting — cuesale heeft
+      // nergens een echte van/nu-kortingsprijs. Bij 2+ bedragen nemen we dus
+      // de laagste ("vanaf"-prijs) als enige prijs, anders het ene bedrag.
+      const priceEls = card.querySelectorAll(".price .amount");
+      let priceOriginal = null;
+      let priceNow = null;
+      if (priceEls.length >= 2) {
+        const values = Array.from(priceEls)
+          .map((el) => parsePrice(el.innerText))
+          .filter((v) => v != null);
+        const minPrice = values.length ? Math.min(...values) : null;
+        priceOriginal = minPrice;
+        priceNow = minPrice;
+      } else if (priceEls.length === 1) {
+        priceNow = parsePrice(priceEls[0].innerText);
+        priceOriginal = priceNow;
+      }
 
-      // --- Prijs nu: schone waarde via itemprop="price" (bv. "290.0") ---
-      const priceNowEl = card.querySelector('span[itemprop="price"]');
-      const priceNow = priceNowEl ? parseFloat(priceNowEl.innerText.trim()) : null;
-
-      // --- Normale prijs: enkel aanwezig bij korting, in <del><em> ---
-      const priceOriginalEl = card.querySelector(
-        'del em[data-oe-expression*="base_price"] .oe_currency_value'
-      );
-      let priceOriginal = priceOriginalEl ? parseOdooPrice(priceOriginalEl.innerText) : null;
-      if (priceOriginal == null || isNaN(priceOriginal)) priceOriginal = priceNow;
-
-      // --- Status/badge (bv. "Sold out") ---
-      const ribbonEl = card.querySelector(".o_ribbon");
-      const discount = ribbonEl ? ribbonEl.innerText.trim() || null : null;
+      // --- Kortingsbadge (indien aanwezig) ---
+      const discountEl = card.querySelector(".onsale");
+      const discount = discountEl ? discountEl.innerText.trim() || null : null;
 
       if (id && title && url) {
         results.push({ id, title, priceOriginal, priceNow, discount, url });
@@ -104,7 +112,7 @@ async function saveProducts(products) {
       skipped += 1;
       continue;
     }
-    
+
     const productId = await getOrCreateProductId(prod);
 
     try {
@@ -125,27 +133,26 @@ async function saveProducts(products) {
   return saved;
 }
 
-/**
- * Controleert of er een volgende pagina is. De site's eigen paginalinks laten
- * "tags=36" en "tags=40" vallen (enkel "tags=8" blijft over), dus we bouwen de
- * volgende URL zelf op met de volledige QUERY i.p.v. de href van de site te volgen.
- */
-async function hasNextPage(page) {
-  return page.evaluate(() => {
-    const active = document.querySelector(".products_pager li.page-item.active");
-    if (!active) return false;
-    const next = active.nextElementSibling;
-    return !!next && !next.classList.contains("disabled");
+/** Geeft de URL van de volgende pagina, of null als er geen is. */
+async function getNextPageUrl(page) {
+  const nextHref = await page.evaluate(() => {
+    const btn = document.querySelector("a.next.page-numbers");
+    return btn ? btn.getAttribute("href") : null;
   });
+
+  if (nextHref) {
+    return nextHref.startsWith("http") ? nextHref : BASE_URL + nextHref;
+  }
+  return null;
 }
 
 async function scrape() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     userAgent:
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" +
-      "AppleWebKit/537.36 (KHTML, like Gecko)" +
-      "Chrome/150.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+      "AppleWebKit/537.36 (KHTML, like Gecko) " +
+      "Chrome/124.0.0.0 Safari/537.36",
     locale: "nl-BE",
   });
   const page = await context.newPage();
@@ -158,14 +165,10 @@ async function scrape() {
 
   while (currentUrl) {
     console.log(`Pagina ${pageNum}: ${currentUrl}`);
-    // "networkidle" timet hier structureel uit: xlrpro.eu (Odoo) heeft
-    // blijvende achtergrond-netwerkactiviteit (bv. livechat/polling) die nooit
-    // stil valt, ook al is de pagina zelf al lang klaar. "domcontentloaded"
-    // volstaat, gecombineerd met de expliciete waitForSelector hieronder.
-    await page.goto(currentUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto(currentUrl, { waitUntil: "networkidle", timeout: 30000 });
 
     try {
-      await page.waitForSelector("td.oe_product", { timeout: 15000 });
+      await page.waitForSelector(PRODUCT_CARD_SELECTOR, { timeout: 15000 });
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
       break;
@@ -174,7 +177,7 @@ async function scrape() {
     const products = await getProductsOnPage(page);
     totalFound += products.length;
 
-    // Dedupliceren op URL (of titel als fallback), ook over pagina's heen
+    // Dedupliceren op url (of titel als fallback), ook over pagina's heen
     const unique = [];
     for (const prod of products) {
       const key = prod.url || prod.title;
@@ -188,9 +191,9 @@ async function scrape() {
     totalSaved += saved;
     console.log(`  → ${products.length} producten gevonden, ${saved} opgeslagen (totaal opgeslagen: ${totalSaved})`);
 
-    const hasNext = await hasNextPage(page);
+    const nextUrl = await getNextPageUrl(page);
+    currentUrl = nextUrl && nextUrl !== currentUrl ? nextUrl : null;
     pageNum += 1;
-    currentUrl = hasNext ? `${BASE_URL}/shop/page/${pageNum}?${QUERY}` : null;
 
     if (currentUrl) {
       console.log("  ⏳ 30s wachten voor volgende pagina...");

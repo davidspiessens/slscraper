@@ -116,6 +116,7 @@ $historyDesc = array_reverse($history);
     <?php if ($product['product_id']): ?>
         <p class="meta"><a href="product.php?id=<?= (int) $product['product_id'] ?>">Bekijk productoverzicht &rarr;</a></p>
     <?php endif; ?>
+    <p class="meta"><a href="add_purchase.php?bstock_product_id=<?= (int) $product['id'] ?>">Aankoop registreren &rarr;</a></p>
     <p class="meta">
         Genegeerd: <?= $product['ignored'] ? 'Ja' : 'Nee' ?>
         <?php if (!$product['ignored']): ?>

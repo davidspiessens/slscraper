@@ -85,6 +85,7 @@ $mysqli->close();
                     <td>
                         <input type="hidden" name="id" form="<?= $formId ?>" value="<?= (int) $brand['id'] ?>">
                         <button type="submit" form="<?= $formId ?>" title="Opslaan">&#128190;</button>
+                        <a href="brand.php?id=<?= (int) $brand['id'] ?>" title="Bekijk merkpagina">&#128065;</a>
                     </td>
                 </tr>
             <?php endforeach; endif; ?>

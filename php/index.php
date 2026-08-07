@@ -41,7 +41,7 @@ $priceRangeJoin = "
 
 $commonSelect = "
     p.id, p.title, p.url, p.created AS product_created, p.product_id,
-    b.id AS brand_id, b.name AS brand_name, b.weight,
+    b.id AS brand_id, b.name AS brand_name, b.weight, b.ignored AS brand_ignored,
     lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
     (lp.priceOriginal - lp.priceNow) AS price_diff,
     pr.highest_price, pr.lowest_price
@@ -135,11 +135,22 @@ $mysqli->close();
         a {
             color: #0a4d92;
         }
+        .meta {
+            margin: 0.2rem 0;
+        }
     </style>
 </head>
 <body>
     <?= render_vat_toggle() ?>
     <h1>Bax B-Stock overzicht</h1>
+
+    <form method="get" action="search.php" style="margin: 0.5rem 0 1rem 0;">
+        <input type="text" name="q" placeholder="Zoek op titel...">
+        <button type="submit">Zoeken</button>
+    </form>
+
+    <p class="meta">Aankopen: <a href="purchases.php">Overzicht</a> - <a href="add_purchase.php">Nieuwe aankoop</a></p>
+    <p class="meta">Verkopen: <a href="sales.php">Overzicht</a> - <a href="add_sale.php">Nieuwe verkoop</a></p>
 
     <h2>Merken <small>(<a href="manage_brands.php">Beheer merken</a>)</small></h2>
     

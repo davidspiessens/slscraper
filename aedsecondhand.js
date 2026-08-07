@@ -14,6 +14,10 @@ const BASE_URL = "https://secondhand.aedgroup.com";
 const FEED_URL = `${BASE_URL}/shop?pagesize=10000&feed=true&DoNotShowVariantsAsSingleProducts=True`;
 const SUPPLIER = 5; // AED Second Hand
 
+// De feed dupliceert soms de merknaam in het naamveld, bv.
+// "L-ACOUSTICS SPEAKER SYSTEM L- ACOUSTICS 5 XT" -> "L-ACOUSTICS 5 XT".
+const LACOUSTICS_DUPLICATE_REGEX = /L-ACOUSTICS\s+SPEAKER\s+SYSTEM\s+L-\s?ACOUSTICS/gi;
+
 /** Zet een Euro-geformatteerd prijsgetal ("€ 1.234,56") om naar een float. */
 function parsePrice(text) {
   if (!text) return null;
@@ -46,7 +50,10 @@ async function fetchProducts() {
     const id = p.productId || null;
     const brand = p.brand ? p.brand.trim() : "";
     const name = p.name ? p.name.trim() : "";
-    const title = [brand, name].filter(Boolean).join(" ").trim() || null;
+    const rawTitle = [brand, name].filter(Boolean).join(" ").trim();
+    const title = rawTitle
+      ? rawTitle.replace(LACOUSTICS_DUPLICATE_REGEX, "L-ACOUSTICS").replace(/\s+/g, " ").trim()
+      : null;
     const url = p.link ? `${BASE_URL}${p.link}` : null;
 
     const priceNow = typeof p.priceDouble === "number" ? p.priceDouble : parsePrice(p.price);

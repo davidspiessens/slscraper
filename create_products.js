@@ -18,6 +18,9 @@ const SECOND_HAND_SUFFIX_REGEX = /\s*-?\s*\[second-hand\]\s*$/i;
 const PAREN_REGEX = /\s*\([^)]*\)/g;
 // Tekst na een liggend streepje omringd door spaties (bv. "12XT – set of 2").
 const DASH_SUFFIX_REGEX = /\s+[-–—]\s+.*$/;
+// AED-feed dupliceert soms de merknaam (bv. "L-ACOUSTICS SPEAKER SYSTEM
+// L- ACOUSTICS 5 XT" -> "L-ACOUSTICS 5 XT").
+const LACOUSTICS_DUPLICATE_REGEX = /L-ACOUSTICS\s+SPEAKER\s+SYSTEM\s+L-\s?ACOUSTICS/gi;
 
 function cleanName(title) {
   return title
@@ -25,6 +28,7 @@ function cleanName(title) {
     .replace(PAREN_REGEX, "")
     .replace(DASH_SUFFIX_REGEX, "")
     .replace(SECOND_HAND_SUFFIX_REGEX, "")
+    .replace(LACOUSTICS_DUPLICATE_REGEX, "L-ACOUSTICS")
     .replace(/\s+/g, " ")
     .trim();
 }

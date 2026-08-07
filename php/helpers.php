@@ -41,6 +41,9 @@ const BSTOCK_PREFIX_REGEX = '/^\(?b-stock\)?:?\s*/i';
 const SECOND_HAND_SUFFIX_REGEX = '/\s*-?\s*\[second-hand\]\s*$/i';
 const PAREN_REGEX = '/\s*\([^)]*\)/';
 const DASH_SUFFIX_REGEX = '/\s+[-–—]\s+.*$/u';
+// AED-feed dupliceert soms de merknaam (bv. "L-ACOUSTICS SPEAKER SYSTEM
+// L- ACOUSTICS 5 XT" -> "L-ACOUSTICS 5 XT").
+const LACOUSTICS_DUPLICATE_REGEX = '/L-ACOUSTICS\s+SPEAKER\s+SYSTEM\s+L-\s?ACOUSTICS/i';
 
 function clean_product_name(string $title): string
 {
@@ -48,8 +51,81 @@ function clean_product_name(string $title): string
     $name = preg_replace(PAREN_REGEX, '', $name);
     $name = preg_replace(DASH_SUFFIX_REGEX, '', $name);
     $name = preg_replace(SECOND_HAND_SUFFIX_REGEX, '', $name);
+    $name = preg_replace(LACOUSTICS_DUPLICATE_REGEX, 'L-ACOUSTICS', $name);
     $name = preg_replace('/\s+/', ' ', $name);
     return trim($name);
+}
+
+/** Normaliseert een woord voor zoekvergelijking: lowercase, leestekens rond het woord weg. */
+function normalize_search_word(string $word): string
+{
+    return trim(mb_strtolower($word), ".,;:()[]{}!?\"'-");
+}
+
+/**
+ * Toegestane Levenshtein-afstand voor een woordpaar, op basis van het
+ * kortste van de twee woorden. Bewust streng (1 typfout voor de meeste
+ * woorden) — anders matchen te veel onverwante korte woorden toevallig
+ * binnen de drempel (bv. "Orange" met "Pionner").
+ */
+function fuzzy_word_threshold(int $shorterLength): int
+{
+    if ($shorterLength <= 7) {
+        return 1;
+    }
+    if ($shorterLength <= 12) {
+        return 2;
+    }
+    return 3;
+}
+
+/**
+ * Fuzzy-match: elk woord van $query moet ergens in $text een woord vinden
+ * met een Levenshtein-afstand binnen de drempel (schaalt met de lengte van
+ * het kortste woord van het paar). Woorden waarvan de lengte te veel
+ * verschilt worden niet vergeleken. Woordvolgorde maakt niet uit.
+ * levenshtein() ondersteunt max. 255 tekens per string, dus langere woorden
+ * worden overgeslagen.
+ */
+function fuzzy_matches(string $query, string $text): bool
+{
+    $queryWords = array_values(array_filter(array_map('normalize_search_word', preg_split('/\s+/', $query) ?: [])));
+    $textWords = array_values(array_filter(array_map('normalize_search_word', preg_split('/\s+/', $text) ?: [])));
+
+    if (empty($queryWords) || empty($textWords)) {
+        return false;
+    }
+
+    foreach ($queryWords as $queryWord) {
+        $queryLen = mb_strlen($queryWord);
+        if ($queryLen > 255 || $queryLen < 3) {
+            // Te korte woorden (1-2 tekens) geven te veel toevalstreffers.
+            continue;
+        }
+
+        $found = false;
+        foreach ($textWords as $textWord) {
+            $textLen = mb_strlen($textWord);
+            if ($textLen > 255 || $textLen < 3) {
+                continue;
+            }
+
+            $threshold = fuzzy_word_threshold(min($queryLen, $textLen));
+            if (abs($queryLen - $textLen) > $threshold) {
+                continue;
+            }
+
+            if (levenshtein($queryWord, $textWord) <= $threshold) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /** Geeft de huidige BTW-vermenigvuldigingsfactor terug (1.21 bij incl., anders 1.0). Alle prijzen in de DB staan excl. BTW. */
@@ -64,6 +140,15 @@ function euro(?string $value): string
         return '-';
     }
     return '€ ' . number_format((float) $value * get_vat_multiplier(), 2, ',', '.');
+}
+
+/** Zoals euro(), maar negeert de incl./excl. BTW-toggle: toont altijd excl. BTW. */
+function euro_excl(?string $value): string
+{
+    if ($value === null) {
+        return '-';
+    }
+    return '€ ' . number_format((float) $value, 2, ',', '.');
 }
 
 /** Rendert de incl./excl. BTW-toggle. Te plaatsen bovenaan elke pagina. */
@@ -252,7 +337,10 @@ function render_multi_price_chart(array $series): string
 function render_product_row(array $row, bool $showGenerateAction = false): void
 {
     $redirectTarget = htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php');
-    $rowStyle = (!empty($row['ignored']) || !empty($row['archived'])) ? ' style="background-color: #f8d7da;"' : '';
+    // Een product/bstock_product met een genegeerd merk telt ook als genegeerd.
+    $rowStyle = (!empty($row['ignored']) || !empty($row['archived']) || !empty($row['brand_ignored']))
+        ? ' style="background-color: #f8d7da;"'
+        : '';
     $urlHost = preg_replace('/^www\./', '', (string) parse_url($row['url'], PHP_URL_HOST));
     ?>
     <tr<?= $rowStyle ?>>

@@ -9,30 +9,77 @@
 
 const pool = require("./db");
 
+// cuesale-titels hebben geen betrouwbaar merk-scheidingsteken (geen pipes,
+// geen B-stock-voorvoegsel — gewoon "Merk Model" of soms enkel "Model").
+// Eerste-woord-extractie levert er evenveel ruis op (Flightcase, Cable,
+// Generic, Power, ...) als echte merken, dus deze leverancier wordt
+// uitgesloten van nieuwe merk-aanmaak. Bestaande merken linken (link_brands.js)
+// blijft wel gewoon werken voor cuesale-producten.
+const CUESALE_SUPPLIER_ID = 11;
+
 // Strip een optioneel B-stock-voorvoegsel in eender welke vorm:
 // bax-shop: "(B-Stock) ", progear: "B-stock: ". Titels zonder voorvoegsel
 // (bv. sommige progear-artikels) blijven ongewijzigd.
 const BSTOCK_PREFIX_REGEX = /^\(?b-stock\)?:?\s*/i;
 const FIRST_WORD_REGEX = /^(\S+)/;
+// salesall: "Used | Merk | Model" of "B-Stock | Merk | Model" — het merk staat
+// tussen de eerste twee pipes en kan uit meerdere woorden bestaan
+// (bv. "Lab Gruppen", "Clay Paky"), dus niet enkel het eerste woord nemen.
+const PIPE_BRAND_REGEX = /^(?:used|b-stock)\s*\|\s*([^|]+?)\s*\|/i;
+// salesall heeft ook titels zonder apart merk-segment (generieke accessoires
+// zoals kabels/flightcases, bv. "Used | Floodlight 1000W HQI Symmetric") —
+// zonder tweede pipe is er geen betrouwbaar merk, dus overslaan i.p.v. "Used"
+// zelf als merk te nemen.
+const PIPE_NO_BRAND_REGEX = /^(?:used|b-stock)\s*\|/i;
+
+// Sommige producttitels beginnen met een sub-merk/productlijn die feitelijk
+// hetzelfde bedrijf is als een reeds bestaand merk (bv. "GrandMA" is de
+// consolelijn van "MA Lighting"). Zonder deze alias-mapping zou het eerste
+// woord ("GrandMA") als apart, fout merk worden aangemaakt. Key = lowercase
+// eerste woord uit de titel, value = lowercase brand.name van het bestaande
+// merk waaraan het moet worden gekoppeld.
+const BRAND_ALIASES = {
+  grandma: "ma lighting",
+};
 
 function extractBrand(title) {
+  const pipeMatch = title.match(PIPE_BRAND_REGEX);
+  if (pipeMatch) {
+    return pipeMatch[1].trim();
+  }
+  if (PIPE_NO_BRAND_REGEX.test(title)) {
+    return null;
+  }
+
   const withoutPrefix = title.replace(BSTOCK_PREFIX_REGEX, "");
   const match = withoutPrefix.match(FIRST_WORD_REGEX);
   return match ? match[1] : null;
 }
 
-async function getExistingFirstWords() {
-  const [rows] = await pool.query("SELECT first_word FROM brand");
-  return new Set(rows.map((row) => row.first_word.toLowerCase()));
+// Zowel first_word als name tellen als "bestaand": first_word omdat dat de
+// gebruikelijke vergelijking is (name kan handmatig hernoemd zijn, bv.
+// "Pioneer" -> "Pioneer DJ"), name omdat de pipe-extractie (salesall) meteen
+// de volledige merknaam oplevert, die toevallig al kan overeenkomen met een
+// eerder handmatig hernoemd merk (bv. "Lab" -> "Lab Gruppen") — zonder deze
+// check zou brand.name's unique index dat als duplicate-insert weigeren.
+async function getExistingBrandKeys() {
+  const [rows] = await pool.query("SELECT first_word, name FROM brand");
+  const keys = new Set();
+  for (const row of rows) {
+    keys.add(row.first_word.toLowerCase());
+    keys.add(row.name.toLowerCase());
+  }
+  return keys;
 }
 
 async function run() {
-  const [rows] = await pool.query("SELECT DISTINCT title FROM bstock_product WHERE brand_id IS NULL");
-  console.log(`${rows.length} unieke producttitels gevonden.`);
+  const [rows] = await pool.query(
+    "SELECT DISTINCT title FROM bstock_product WHERE brand_id IS NULL AND supplier_id != ?",
+    [CUESALE_SUPPLIER_ID]
+  );
+  console.log(`${rows.length} unieke producttitels gevonden (cuesale uitgesloten).`);
 
-  // Vergelijk met first_word (niet name): name kan handmatig hernoemd zijn
-  // (bv. "Pioneer" -> "Pioneer DJ"), first_word blijft het geëxtraheerde woord.
-  const existing = await getExistingFirstWords();
+  const existing = await getExistingBrandKeys();
   // Map i.p.v. Set: dedupliceren op lowercase key, want brand.name heeft een
   // case-insensitive unique index (anders botsen bv. "APEX" en "Apex" binnen
   // dezelfde run).
@@ -46,8 +93,9 @@ async function run() {
       continue;
     }
     const key = brand.toLowerCase();
-    if (!existing.has(key) && !newBrands.has(key)) {
-      newBrands.set(key, brand);
+    const resolvedKey = BRAND_ALIASES[key] || key;
+    if (!existing.has(resolvedKey) && !newBrands.has(resolvedKey)) {
+      newBrands.set(resolvedKey, brand);
     }
   }
 

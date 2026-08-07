@@ -32,7 +32,7 @@ if (!$product) {
 
 $listingsSql = "
     SELECT bp.id, bp.title, bp.url, bp.created AS product_created, bp.product_id, bp.ignored, bp.archived,
-           b.id AS brand_id, b.name AS brand_name, b.weight,
+           b.id AS brand_id, b.name AS brand_name, b.weight, b.ignored AS brand_ignored,
            lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
            (lp.priceOriginal - lp.priceNow) AS price_diff,
            pr.highest_price, pr.lowest_price
@@ -111,6 +111,21 @@ $suppliersStmt->execute();
 $suppliers = $suppliersStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $suppliersStmt->close();
 
+$purchasesStmt = $mysqli->prepare(
+    'SELECT pu.id, pu.price, pu.invoice_date, pu.invoice_number,
+            s.name AS supplier_name,
+            bp.id AS bstock_product_id, bp.title AS bstock_title
+     FROM purchase pu
+     JOIN supplier s ON s.id = pu.supplier_id
+     LEFT JOIN bstock_product bp ON bp.id = pu.bstock_product_id
+     WHERE pu.product_id = ?
+     ORDER BY pu.invoice_date DESC, pu.id DESC'
+);
+$purchasesStmt->bind_param('i', $productId);
+$purchasesStmt->execute();
+$purchases = $purchasesStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$purchasesStmt->close();
+
 $mysqli->close();
 
 ?>
@@ -176,6 +191,7 @@ $mysqli->close();
     <p class="meta">EAN: <?= $product['ean'] !== null ? htmlspecialchars($product['ean']) : '-' ?></p>
     <p class="meta">Product aangemaakt: <?= htmlspecialchars($product['created']) ?></p>
     <p class="meta">Laagste prijs: <?= euro($minPrice) ?> &nbsp;|&nbsp; Hoogste prijs: <?= euro($maxPrice) ?></p>
+    <p class="meta"><a href="add_purchase.php?product_id=<?= (int) $product['id'] ?>">Aankoop registreren &rarr;</a></p>
 
     <h2>Leveranciers</h2>
     <?php if (empty($suppliers)): ?>
@@ -215,6 +231,40 @@ $mysqli->close();
 
     <h2>Prijsverloop (alle gekoppelde B-stock listings)</h2>
     <?= $listingsChart ?>
+
+    <h2>Aankopen (<?= count($purchases) ?>)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Leverancier</th>
+                <th>Bstock-listing</th>
+                <th class="num">Prijs</th>
+                <th>Factuurdatum</th>
+                <th>Factuurnummer</th>
+                <th>Actie</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (empty($purchases)): ?>
+                <tr><td colspan="6">Geen aankopen gevonden voor dit product.</td></tr>
+            <?php else: foreach ($purchases as $row): ?>
+                <tr>
+                    <td><?= htmlspecialchars($row['supplier_name']) ?></td>
+                    <td>
+                        <?php if ($row['bstock_product_id']): ?>
+                            <a href="bstock_product.php?id=<?= (int) $row['bstock_product_id'] ?>"><?= htmlspecialchars($row['bstock_title']) ?></a>
+                        <?php else: ?>
+                            -
+                        <?php endif; ?>
+                    </td>
+                    <td class="num"><?= euro((string) $row['price']) ?></td>
+                    <td><?= htmlspecialchars($row['invoice_date']) ?></td>
+                    <td><?= htmlspecialchars($row['invoice_number']) ?></td>
+                    <td><a href="add_purchase.php?id=<?= (int) $row['id'] ?>" title="Bewerken">&#9999;&#65039;</a></td>
+                </tr>
+            <?php endforeach; endif; ?>
+        </tbody>
+    </table>
 
     <h2>Naam bewerken</h2>
     <form method="post" action="update_product_name.php">
