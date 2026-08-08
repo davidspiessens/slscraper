@@ -1,12 +1,12 @@
-node bax.js b-stock &&
-node aedsecondhand.js &&
-node xlrpro.js &&
-node soundsale.js &&
-node progear.js &&
-node cuesale.js &&
-node salesall.js &&
-node brands.js &&
-node link_brands.js &&
-node link_products.js &&
-node archive_products.js &&
-node archive_soldout_xlrpro.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/bax.js b-stock
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/aedsecondhand.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/xlrpro.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/soundsale.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/progear.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/cuesale.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/salesall.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/brands.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/link_brands.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/link_products.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/archive_products.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/archive_soldout_xlrpro.js
