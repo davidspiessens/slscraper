@@ -8,4 +8,3 @@
 /home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/brands.js
 /home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/link_brands.js
 /home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/link_products.js
-/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/archive_soldout_xlrpro.js
