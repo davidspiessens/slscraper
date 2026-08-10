@@ -42,6 +42,7 @@ $priceRangeJoin = "
 $commonSelect = "
     p.id, p.title, p.url, p.created AS product_created, p.product_id,
     b.id AS brand_id, b.name AS brand_name, b.weight, b.ignored AS brand_ignored,
+    sup.name AS supplier_name,
     lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
     (lp.priceOriginal - lp.priceNow) AS price_diff,
     pr.highest_price, pr.lowest_price
@@ -51,6 +52,7 @@ $lightestProductsSql = "
     SELECT $commonSelect
     FROM bstock_product p
     JOIN brand b ON b.id = p.brand_id
+    LEFT JOIN supplier sup ON sup.id = p.supplier_id
     $latestPriceJoin
     $priceRangeJoin
     WHERE p.archived = 0 AND p.ignored = 0 AND b.ignored = 0
@@ -62,6 +64,7 @@ $biggestDiscountsSql = "
     SELECT $commonSelect
     FROM bstock_product p
     LEFT JOIN brand b ON b.id = p.brand_id
+    LEFT JOIN supplier sup ON sup.id = p.supplier_id
     $latestPriceJoin
     $priceRangeJoin
     WHERE p.archived = 0 AND p.ignored = 0
@@ -75,6 +78,7 @@ $recentProductsSql = "
     SELECT $commonSelect
     FROM bstock_product p
     LEFT JOIN brand b ON b.id = p.brand_id
+    LEFT JOIN supplier sup ON sup.id = p.supplier_id
     $latestPriceJoin
     $priceRangeJoin
     WHERE p.archived = 0 AND p.ignored = 0
@@ -172,6 +176,7 @@ $mysqli->close();
         <tr>
             <th>Titel</th>
             <th>Merk</th>
+            <th>Leverancier</th>
             <th class="num">Gewicht</th>
             <th class="num">Prijs (van)</th>
             <th class="num">Prijs (nu)</th>
@@ -194,7 +199,7 @@ $mysqli->close();
         </thead>
         <tbody>
             <?php if (empty($lightestProducts)): ?>
-                <tr><td colspan="12">Geen producten gevonden.</td></tr>
+                <tr><td colspan="13">Geen producten gevonden.</td></tr>
             <?php else: foreach ($lightestProducts as $row): render_product_row($row); endforeach; endif; ?>
         </tbody>
     </table>
@@ -206,7 +211,7 @@ $mysqli->close();
         </thead>
         <tbody>
             <?php if (empty($biggestDiscounts)): ?>
-                <tr><td colspan="12">Geen producten gevonden.</td></tr>
+                <tr><td colspan="13">Geen producten gevonden.</td></tr>
             <?php else: foreach ($biggestDiscounts as $row): render_product_row($row); endforeach; endif; ?>
         </tbody>
     </table>
@@ -218,7 +223,7 @@ $mysqli->close();
         </thead>
         <tbody>
             <?php if (empty($recentProducts)): ?>
-                <tr><td colspan="12">Geen producten gevonden.</td></tr>
+                <tr><td colspan="13">Geen producten gevonden.</td></tr>
             <?php else: foreach ($recentProducts as $row): render_product_row($row); endforeach; endif; ?>
         </tbody>
     </table>

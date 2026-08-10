@@ -183,7 +183,7 @@ async function scrape() {
       );
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
-      break;
+      process.exit(1);
     }
 
     const products = await getProductsOnPage(page);

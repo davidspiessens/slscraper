@@ -358,6 +358,7 @@ function render_product_row(array $row, bool $showGenerateAction = false): void
                 -
             <?php endif; ?>
         </td>
+        <td><?= isset($row['supplier_name']) ? htmlspecialchars($row['supplier_name']) : '-' ?></td>
         <?php $isLowest = $row['lowest_price'] !== null && (float) $row['priceNow'] === (float) $row['lowest_price']; ?>
         <td class="num"><?= $row['weight'] === null ? '-' : htmlspecialchars((string) $row['weight']) ?></td>
         <td class="num"><?= euro($row['priceOriginal']) ?></td>

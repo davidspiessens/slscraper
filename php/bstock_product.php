@@ -15,9 +15,11 @@ $mysqli = get_db_connection();
 
 $productStmt = $mysqli->prepare(
     'SELECT p.id, p.title, p.url, p.created AS product_created, p.product_id, p.ignored,
-            b.id AS brand_id, b.name AS brand_name, b.weight
+            b.id AS brand_id, b.name AS brand_name, b.weight,
+            sup.name AS supplier_name
      FROM bstock_product p
      LEFT JOIN brand b ON b.id = p.brand_id
+     LEFT JOIN supplier sup ON sup.id = p.supplier_id
      WHERE p.id = ?'
 );
 $productStmt->bind_param('i', $productId);
@@ -110,6 +112,7 @@ $historyDesc = array_reverse($history);
             -
         <?php endif; ?>
     </p>
+    <p class="meta">Leverancier: <?= $product['supplier_name'] !== null ? htmlspecialchars($product['supplier_name']) : '-' ?></p>
     <p class="meta">Product aangemaakt: <?= htmlspecialchars($product['product_created']) ?></p>
     <?php $urlHost = preg_replace('/^www\./', '', (string) parse_url($product['url'], PHP_URL_HOST)); ?>
     <p class="meta"><a href="<?= htmlspecialchars($product['url']) ?>" target="_blank" rel="noopener">Bekijk op <?= htmlspecialchars($urlHost) ?> &#8599;</a></p>

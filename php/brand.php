@@ -27,11 +27,13 @@ if (!$brand) {
 $productsSql = "
     SELECT p.id, p.title, p.url, p.created AS product_created, p.product_id, p.archived,
            b.id AS brand_id, b.name AS brand_name, b.weight, b.ignored AS brand_ignored,
+           sup.name AS supplier_name,
            lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
            (lp.priceOriginal - lp.priceNow) AS price_diff,
            pr.highest_price, pr.lowest_price
     FROM bstock_product p
     JOIN brand b ON b.id = p.brand_id
+    LEFT JOIN supplier sup ON sup.id = p.supplier_id
     JOIN (
         SELECT bpp.bstock_product_id, bpp.priceOriginal, bpp.priceNow, bpp.discount_label, bpp.created
         FROM bstock_product_price bpp
@@ -136,6 +138,7 @@ $mysqli->close();
             <tr>
                 <th>Titel</th>
                 <th>Merk</th>
+                <th>Leverancier</th>
                 <th class="num">Gewicht</th>
                 <th class="num">Prijs (van)</th>
                 <th class="num">Prijs (nu)</th>
@@ -150,7 +153,7 @@ $mysqli->close();
         </thead>
         <tbody>
             <?php if (empty($products)): ?>
-                <tr><td colspan="12">Geen producten gevonden voor dit merk.</td></tr>
+                <tr><td colspan="13">Geen producten gevonden voor dit merk.</td></tr>
             <?php else: foreach ($products as $row): render_product_row($row, true); endforeach; endif; ?>
         </tbody>
     </table>
