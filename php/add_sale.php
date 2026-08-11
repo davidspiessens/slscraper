@@ -32,9 +32,10 @@ $prefillInvoiceNumber = $isEdit ? $sale['invoice_number'] : '';
 
 $purchasesStmt = $mysqli->prepare(
     "SELECT pu.id, pu.invoice_date, pu.invoice_number, pu.price,
-            p.name AS product_name, s.name AS supplier_name
+            p.name AS product_name, b.name AS brand_name, s.name AS supplier_name
      FROM purchase pu
      JOIN product p ON p.id = pu.product_id
+     LEFT JOIN brand b ON b.id = p.brand_id
      JOIN supplier s ON s.id = pu.supplier_id
      LEFT JOIN sale sa ON sa.purchase_id = pu.id
      WHERE sa.id IS NULL OR pu.id = ?
@@ -106,7 +107,7 @@ $mysqli->close();
                     <option value="">-- kies een aankoop --</option>
                     <?php foreach ($purchases as $p): ?>
                         <option value="<?= (int) $p['id'] ?>" <?= (int) $prefillPurchaseId === (int) $p['id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($p['invoice_date']) ?> - <?= htmlspecialchars($p['product_name']) ?> (aankoop: € <?= htmlspecialchars(number_format((float) $p['price'], 2, ',', '.')) ?> bij <?= htmlspecialchars($p['supplier_name']) ?>)
+                            <?= htmlspecialchars($p['invoice_date']) ?> - <?= htmlspecialchars(trim(($p['brand_name'] ?? '') . ' ' . $p['product_name'])) ?> (aankoop: € <?= htmlspecialchars(number_format((float) $p['price'], 2, ',', '.')) ?> bij <?= htmlspecialchars($p['supplier_name']) ?>)
                         </option>
                     <?php endforeach; ?>
                 </select>

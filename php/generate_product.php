@@ -31,7 +31,18 @@ if (!$bstockProduct) {
 }
 
 if ($bstockProduct['brand_id'] && !$bstockProduct['product_id']) {
-    $name = clean_product_name($bstockProduct['title']);
+    $brandStmt = $mysqli->prepare('SELECT name, first_word FROM brand WHERE id = ?');
+    $brandStmt->bind_param('i', $bstockProduct['brand_id']);
+    $brandStmt->execute();
+    $brandRow = $brandStmt->get_result()->fetch_assoc();
+    $brandStmt->close();
+
+    // Langste eerst, zodat "D&B Audiotechnik" geprobeerd wordt vóór het
+    // kortere "D&B" (zie clean_product_name in helpers.php).
+    $brandPrefixes = $brandRow ? array_unique([$brandRow['name'], $brandRow['first_word']]) : [];
+    usort($brandPrefixes, fn($a, $b) => strlen($b) - strlen($a));
+
+    $name = clean_product_name($bstockProduct['title'], $brandPrefixes);
 
     if ($name !== '') {
         $findStmt = $mysqli->prepare('SELECT id FROM product WHERE brand_id = ? AND name = ?');

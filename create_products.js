@@ -1,7 +1,8 @@
 /**
  * Maakt unieke producten aan in de tabel `product` op basis van bstock_product.
  * Unieke sleutel: brand_id + naam (titel zonder leverancier-specifieke
- * B-stock/second-hand markeringen).
+ * B-stock/second-hand markeringen). product.name bevat geen merknaam (die
+ * komt uit de brand-koppeling, zie link_products.js/helpers.php).
  *
  * Uitvoeren:
  *     node create_products.js [merk-id]
@@ -21,10 +22,39 @@ const DASH_SUFFIX_REGEX = /\s+[-–—]\s+.*$/;
 // AED-feed dupliceert soms de merknaam (bv. "L-ACOUSTICS SPEAKER SYSTEM
 // L- ACOUSTICS 5 XT" -> "L-ACOUSTICS 5 XT").
 const LACOUSTICS_DUPLICATE_REGEX = /L-ACOUSTICS\s+SPEAKER\s+SYSTEM\s+L-\s?ACOUSTICS/gi;
+// salesall: "Used | Merk | Model" of "B-Stock | Merk | Model" — enkel het
+// modelgedeelte (na de tweede pipe) hoort in product.name.
+const PIPE_TITLE_REGEX = /^(?:used|b-stock)\s*\|\s*[^|]+?\s*\|\s*(.+)$/i;
 
-function cleanName(title) {
-  return title
-    .replace(BSTOCK_PREFIX_REGEX, "")
+/** Strip het langst passende merkvoorvoegsel (zie link_products.js). */
+function stripBrandPrefix(title, brandPrefixes) {
+  for (const prefix of brandPrefixes) {
+    if (!prefix) continue;
+    const regex = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+`, "i");
+    if (regex.test(title)) {
+      return title.replace(regex, "");
+    }
+  }
+  return title;
+}
+
+function cleanName(title, brandPrefixes) {
+  const pipeMatch = title.match(PIPE_TITLE_REGEX);
+  if (pipeMatch) {
+    return pipeMatch[1]
+      .replace(PAREN_REGEX, "")
+      .replace(DASH_SUFFIX_REGEX, "")
+      .replace(SECOND_HAND_SUFFIX_REGEX, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // B-stock-voorvoegsel eerst weg (bax "(B-Stock) Fazley ...") — anders
+  // begint de titel niet letterlijk met de merknaam en mist de brand-strip.
+  const withoutBstockPrefix = title.replace(BSTOCK_PREFIX_REGEX, "");
+  const working = stripBrandPrefix(withoutBstockPrefix, brandPrefixes);
+
+  return working
     .replace(PAREN_REGEX, "")
     .replace(DASH_SUFFIX_REGEX, "")
     .replace(SECOND_HAND_SUFFIX_REGEX, "")
@@ -46,6 +76,15 @@ async function run() {
     process.exit(1);
   }
 
+  const [brands] = await pool.query("SELECT id, name, first_word FROM brand");
+  const brandPrefixesById = new Map(
+    brands.map((b) => {
+      // Langste eerst, zie stripBrandPrefix.
+      const prefixes = [...new Set([b.name, b.first_word])].sort((a, b2) => b2.length - a.length);
+      return [b.id, prefixes];
+    })
+  );
+
   const query = brandId
     ? "SELECT DISTINCT brand_id, title FROM bstock_product WHERE brand_id = ?"
     : "SELECT DISTINCT brand_id, title FROM bstock_product WHERE brand_id IS NOT NULL";
@@ -63,7 +102,7 @@ async function run() {
   const newProducts = [];
 
   for (const row of rows) {
-    const name = cleanName(row.title);
+    const name = cleanName(row.title, brandPrefixesById.get(row.brand_id) || []);
     if (!name) continue;
 
     const key = `${row.brand_id}::${name}`;

@@ -5,6 +5,11 @@
  * geval wordt de langst matchende productnaam gebruikt die de titel als
  * prefix heeft, op een woordgrens.
  *
+ * product.name bevat geen merknaam (die komt uit de brand-koppeling) — de
+ * bstock-titel bevat dat meestal wel (bv. "Martin Audio AQ112 Subwoofer",
+ * of salesall's "Used | Merk | Model"), dus dat wordt hier ook gestript
+ * vóór het vergelijken.
+ *
  * Uitvoeren:
  *     node link_products.js
  */
@@ -23,10 +28,37 @@ const DASH_SUFFIX_REGEX = /\s+[-–—]\s+.*$/;
 // AED-feed dupliceert soms de merknaam (bv. "L-ACOUSTICS SPEAKER SYSTEM
 // L- ACOUSTICS 5 XT" -> "L-ACOUSTICS 5 XT").
 const LACOUSTICS_DUPLICATE_REGEX = /L-ACOUSTICS\s+SPEAKER\s+SYSTEM\s+L-\s?ACOUSTICS/gi;
+// salesall: "Used | Merk | Model" of "B-Stock | Merk | Model" — enkel het
+// modelgedeelte (na de tweede pipe) hoort in product.name.
+const PIPE_TITLE_REGEX = /^(?:used|b-stock)\s*\|\s*[^|]+?\s*\|\s*(.+)$/i;
 
-function cleanName(title) {
-  return title
-    .replace(BSTOCK_PREFIX_REGEX, "")
+/** Strip het langst passende merkvoorvoegsel. brandPrefixes moet van lang naar
+ * kort staan (bv. ["D&B Audiotechnik", "D&B"]) zodat "D&B Audiotechnik D80"
+ * niet blijft steken op het kortere "D&B" en "Audiotechnik" als rommelrest
+ * achterlaat. */
+function stripBrandPrefix(title, brandPrefixes) {
+  for (const prefix of brandPrefixes) {
+    if (!prefix) continue;
+    const regex = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+`, "i");
+    if (regex.test(title)) {
+      return title.replace(regex, "");
+    }
+  }
+  return title;
+}
+
+function cleanName(title, brandPrefixes) {
+  const pipeMatch = title.match(PIPE_TITLE_REGEX);
+  if (pipeMatch) {
+    return pipeMatch[1].replace(/\s+/g, " ").trim();
+  }
+
+  // B-stock-voorvoegsel eerst weg (bax "(B-Stock) Fazley ...") — anders
+  // begint de titel niet letterlijk met de merknaam en mist de brand-strip.
+  const withoutBstockPrefix = title.replace(BSTOCK_PREFIX_REGEX, "");
+  const working = stripBrandPrefix(withoutBstockPrefix, brandPrefixes);
+
+  return working
     .replace(PAREN_REGEX, "")
     .replace(DASH_SUFFIX_REGEX, "")
     .replace(SECOND_HAND_SUFFIX_REGEX, "")
@@ -48,6 +80,15 @@ function findPrefixMatch(name, candidates) {
 }
 
 async function run() {
+  const [brands] = await pool.query("SELECT id, name, first_word FROM brand");
+  const brandPrefixesById = new Map(
+    brands.map((b) => {
+      // Langste eerst (zie stripBrandPrefix), dedupliceren als name === first_word.
+      const prefixes = [...new Set([b.name, b.first_word])].sort((a, b2) => b2.length - a.length);
+      return [b.id, prefixes];
+    })
+  );
+
   const [products] = await pool.query("SELECT id, brand_id, name FROM product");
   const productIdByKey = new Map(products.map((p) => [`${p.brand_id}::${p.name}`, p.id]));
 
@@ -74,7 +115,7 @@ async function run() {
   let skipped = 0;
 
   for (const bp of bstockProducts) {
-    const name = cleanName(bp.title);
+    const name = cleanName(bp.title, brandPrefixesById.get(bp.brand_id) || []);
     const key = `${bp.brand_id}::${name}`;
 
     let productId = productIdByKey.get(key);

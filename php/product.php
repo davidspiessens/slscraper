@@ -130,12 +130,17 @@ $purchasesStmt->close();
 
 $mysqli->close();
 
+// Merknaam zit niet meer in product.name (zie ignore_product.php-historiek) —
+// hier expliciet samenvoegen voor titel/heading, elders (bv. de productlijst
+// op brand.php) volstaat de kale naam omdat het merk al uit de context blijkt.
+$productFullName = trim(($product['brand_name'] ?? '') . ' ' . $product['name']);
+
 ?>
 <!DOCTYPE html>
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <title><?= htmlspecialchars($product['name']) ?> - Bax B-Stock overzicht</title>
+    <title><?= htmlspecialchars($productFullName) ?> - Bax B-Stock overzicht</title>
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
@@ -179,7 +184,7 @@ $mysqli->close();
 <body>
     <?= render_vat_toggle() ?>
     <p><a href="index.php">&larr; Terug naar overzicht</a></p>
-    <h1><?= htmlspecialchars($product['name']) ?></h1>
+    <h1><?= htmlspecialchars($productFullName) ?></h1>
 
     <p class="meta">
         Merk:

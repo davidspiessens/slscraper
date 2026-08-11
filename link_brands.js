@@ -13,6 +13,14 @@ const pool = require("./db");
 // bax-shop: "(B-Stock) ", progear: "B-stock: ". Titels zonder voorvoegsel
 // (bv. sommige progear-artikels) blijven ongewijzigd.
 const BSTOCK_PREFIX_REGEX = /^\(?b-stock\)?:?\s*/i;
+// Zie brands.js: kinxsound zet vaak een aantal vooraan de titel ("8X MARTIN
+// AUDIO...", "11+1 VARI*LITE...") — zonder dit te strippen matcht dat aantal
+// zelf op een (nep-)merk i.p.v. het echte merk verderop in de titel.
+const QUANTITY_PREFIX_REGEX = /^\d+(?:\+\d+)?x?\s+/i;
+// Zie brands.js: sommige titels laten het eerste woord op een leesteken
+// eindigen (bv. kinxsound "AD-SYSTEMS: ...", "DYNACORD: ..."), dat hoort niet
+// bij de merknaam.
+const TRAILING_PUNCTUATION_REGEX = /[:,.]+$/;
 const FIRST_WORD_REGEX = /^(\S+)/;
 // salesall: "Used | Merk | Model" of "B-Stock | Merk | Model" — het merk staat
 // tussen de eerste twee pipes en kan uit meerdere woorden bestaan
@@ -31,6 +39,11 @@ const BRAND_ALIASES = {
   grandma: "ma lighting",
 };
 
+// Zie brands.js: "Martin" op zich matcht het bestaande merk "Martin
+// Professional" (first_word "Martin"), terwijl titels als "Martin Audio ..."
+// (kinxsound) het andere, al bestaande merk "Martin Audio" bedoelen.
+const MULTI_WORD_BRAND_PREFIXES = ["martin audio"];
+
 function extractFirstWord(title) {
   const pipeMatch = title.match(PIPE_BRAND_REGEX);
   if (pipeMatch) {
@@ -40,9 +53,18 @@ function extractFirstWord(title) {
     return null;
   }
 
-  const withoutPrefix = title.replace(BSTOCK_PREFIX_REGEX, "");
+  const withoutPrefix = title.replace(BSTOCK_PREFIX_REGEX, "").replace(QUANTITY_PREFIX_REGEX, "");
+
+  const lower = withoutPrefix.toLowerCase();
+  const multiWordMatch = MULTI_WORD_BRAND_PREFIXES.find(
+    (prefix) => lower === prefix || lower.startsWith(`${prefix} `)
+  );
+  if (multiWordMatch) {
+    return withoutPrefix.slice(0, multiWordMatch.length);
+  }
+
   const match = withoutPrefix.match(FIRST_WORD_REGEX);
-  return match ? match[1] : null;
+  return match ? match[1].replace(TRAILING_PUNCTUATION_REGEX, "") : null;
 }
 
 async function run() {

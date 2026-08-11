@@ -44,11 +44,40 @@ const DASH_SUFFIX_REGEX = '/\s+[-–—]\s+.*$/u';
 // AED-feed dupliceert soms de merknaam (bv. "L-ACOUSTICS SPEAKER SYSTEM
 // L- ACOUSTICS 5 XT" -> "L-ACOUSTICS 5 XT").
 const LACOUSTICS_DUPLICATE_REGEX = '/L-ACOUSTICS\s+SPEAKER\s+SYSTEM\s+L-\s?ACOUSTICS/i';
+// salesall: "Used | Merk | Model" of "B-Stock | Merk | Model" — enkel het
+// modelgedeelte (na de tweede pipe) hoort in product.name, het merk zelf
+// komt uit de brand-koppeling.
+const PIPE_TITLE_REGEX = '/^(?:used|b-stock)\s*\|\s*[^|]+?\s*\|\s*(.+)$/i';
 
-function clean_product_name(string $title): string
+/** product.name mag geen merknaam bevatten (die komt uit de brand-koppeling,
+ * zie brand.php/product.php). Bij salesall's pipe-formaat ("Used | Merk |
+ * Model") wordt enkel het modelgedeelte gebruikt; bij andere leveranciers
+ * begint de titel doorgaans met de merknaam zelf (bv. "Martin Audio AQ112
+ * Subwoofer"), die vooraan wordt afgestript. $brandPrefixes = brand.name en
+ * brand.first_word, langste eerst (bv. ["D&B Audiotechnik", "D&B"]) zodat
+ * een kortere merknaam geen rommelrest achterlaat (vgl. link_products.js). */
+function clean_product_name(string $title, array $brandPrefixes = []): string
 {
-    $name = preg_replace(BSTOCK_PREFIX_REGEX, '', $title);
-    $name = preg_replace(PAREN_REGEX, '', $name);
+    if (preg_match(PIPE_TITLE_REGEX, $title, $pipeMatch)) {
+        return trim(preg_replace('/\s+/', ' ', $pipeMatch[1]));
+    }
+
+    // B-stock-voorvoegsel eerst weg (bax "(B-Stock) Fazley ...") — anders
+    // begint de titel niet letterlijk met de merknaam en mist de brand-strip.
+    $title = preg_replace(BSTOCK_PREFIX_REGEX, '', $title);
+
+    foreach ($brandPrefixes as $prefix) {
+        if ($prefix === null || $prefix === '') {
+            continue;
+        }
+        $regex = '/^' . preg_quote($prefix, '/') . '\s+/i';
+        if (preg_match($regex, $title)) {
+            $title = preg_replace($regex, '', $title);
+            break;
+        }
+    }
+
+    $name = preg_replace(PAREN_REGEX, '', $title);
     $name = preg_replace(DASH_SUFFIX_REGEX, '', $name);
     $name = preg_replace(SECOND_HAND_SUFFIX_REGEX, '', $name);
     $name = preg_replace(LACOUSTICS_DUPLICATE_REGEX, 'L-ACOUSTICS', $name);

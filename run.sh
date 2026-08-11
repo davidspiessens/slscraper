@@ -5,6 +5,7 @@
 /home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/progear.js
 /home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/cuesale.js
 /home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/salesall.js
+/home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/kinxsound.js
 /home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/brands.js
 /home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/link_brands.js
 /home/david/.nvm/versions/node/v24.19.0/bin/node /home/david/slscraper/link_products.js
