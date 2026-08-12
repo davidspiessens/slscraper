@@ -108,11 +108,26 @@ async function run() {
     productIdsByWord.get(key).push(product.id);
   }
 
+  // Zie brands.js: als de kandidaat geen exacte match heeft, kan het toch een
+  // voorvoegsel zijn van een reeds bestaand, langer merk (bv. kandidaat
+  // "Austrian" terwijl het merk inmiddels "Austrian Audio" heet). Zonder deze
+  // fallback blijft zo'n product simpelweg ongekoppeld liggen.
+  function findBrandByPrefix(resolvedKey) {
+    const matches = brands.filter(
+      (brand) =>
+        brand.first_word.toLowerCase().startsWith(`${resolvedKey} `) ||
+        brand.name.toLowerCase().startsWith(`${resolvedKey} `)
+    );
+    // Bij meerdere mogelijke matches is het te onzeker om er automatisch één
+    // te kiezen — dan liever ongekoppeld laten dan fout koppelen.
+    return matches.length === 1 ? matches[0] : null;
+  }
+
   let totalLinked = 0;
 
   for (const [key, productIds] of productIdsByWord) {
     const resolvedKey = BRAND_ALIASES[key] || key;
-    const brand = brandsByWord.get(resolvedKey) || brandsByName.get(resolvedKey);
+    const brand = brandsByWord.get(resolvedKey) || brandsByName.get(resolvedKey) || findBrandByPrefix(resolvedKey);
     if (!brand || productIds.length === 0) continue;
 
     const [result] = await pool.query(
