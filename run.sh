@@ -13,6 +13,7 @@ $NODE $DIR/salesall.js && $NODE $DIR/archive_products.js 10
 $NODE $DIR/kinxsound.js && $NODE $DIR/archive_products.js 12
 $NODE $DIR/coolblue.js && $NODE $DIR/archive_products.js 13
 $NODE $DIR/thomann.js && $NODE $DIR/archive_products.js 14
+$NODE $DIR/musicstore.js && $NODE $DIR/archive_products.js 15
 $NODE $DIR/brands.js
 $NODE $DIR/link_brands.js
 $NODE $DIR/link_products.js

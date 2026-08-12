@@ -47,15 +47,20 @@ const PIPE_NO_BRAND_REGEX = /^(?:used|b-stock)\s*\|/i;
 // merk waaraan het moet worden gekoppeld.
 const BRAND_ALIASES = {
   grandma: "ma lighting",
+  // thomann-titels gebruiken "Martin Guitar" (enkelvoud), het bestaande merk
+  // (van een andere leverancier) heet "Martin Guitars" (meervoud).
+  "martin guitar": "martin guitars",
 };
 
 // Merken waarvan het eerste woord alleen ambigu is: "Martin" op zich matcht
 // het bestaande merk "Martin Professional" (first_word "Martin"), terwijl
-// titels als "Martin Audio ..." (kinxsound) eigenlijk het andere, al
-// bestaande merk "Martin Audio" bedoelen. Deze lijst met lowercase
-// twee-woord-voorvoegsels wordt vóór de eerste-woord-extractie gecontroleerd
-// zodat zulke titels niet fout aan het eerste-woord-merk gekoppeld worden.
-const MULTI_WORD_BRAND_PREFIXES = ["martin audio"];
+// titels als "Martin Audio ..." (kinxsound) of "Martin Guitar ..." (thomann)
+// eigenlijk een ander, al bestaand merk bedoelen. Zelfde verhaal voor "Adam"
+// (Adam Audio, studiomonitors) vs "Adam Hall" (cases/hardware, compleet
+// andere firma). Deze lijst met lowercase twee-woord-voorvoegsels wordt vóór
+// de eerste-woord-extractie gecontroleerd zodat zulke titels niet fout aan
+// het eerste-woord-merk gekoppeld worden.
+const MULTI_WORD_BRAND_PREFIXES = ["martin audio", "martin guitar", "adam hall"];
 
 function extractBrand(title) {
   const pipeMatch = title.match(PIPE_BRAND_REGEX);
