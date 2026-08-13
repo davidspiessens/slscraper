@@ -63,9 +63,23 @@ function cleanName(title, brandPrefixes) {
     .trim();
 }
 
+/** Normaliseert een naam enkel voor vergelijkingsdoeleinden: haakjes (en hun
+ * inhoud) en koppeltekens worden genegeerd, zodat bv. "PLX1000" niet als
+ * apart product wordt aangemaakt naast het bestaande "PLX-1000", en "VM-50
+ * actieve DJ-monitor" niet naast "VM-50 actieve DJ-monitor (per stuk)" (waar
+ * de haakjes wél bij de officiële naam horen). Zie ook link_products.js. */
+function normalizeForMatching(name) {
+  return name
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)/g, "")
+    .replace(/-/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function getExistingProductKeys() {
   const [rows] = await pool.query("SELECT brand_id, name FROM product");
-  return new Set(rows.map((row) => `${row.brand_id}::${row.name}`));
+  return new Set(rows.map((row) => `${row.brand_id}::${normalizeForMatching(row.name)}`));
 }
 
 async function run() {
@@ -105,7 +119,7 @@ async function run() {
     const name = cleanName(row.title, brandPrefixesById.get(row.brand_id) || []);
     if (!name) continue;
 
-    const key = `${row.brand_id}::${name}`;
+    const key = `${row.brand_id}::${normalizeForMatching(name)}`;
     if (existing.has(key) || seen.has(key)) continue;
 
     seen.add(key);

@@ -3,7 +3,10 @@
  * brand_id + naam (titel zonder "(B-Stock)"). De bstock-titel mag langer
  * zijn dan de productnaam (bv. met extra omschrijving erachter) - in dat
  * geval wordt de langst matchende productnaam gebruikt die de titel als
- * prefix heeft, op een woordgrens.
+ * prefix heeft, op een woordgrens. Omgekeerd (b-stock titel kortér dan de
+ * productnaam, bv. omdat een leverancier een deel van de omschrijving
+ * weglaat) wordt ook geprobeerd, maar enkel als dat ondubbelzinnig naar
+ * precies één product wijst.
  *
  * product.name bevat geen merknaam (die komt uit de brand-koppeling) — de
  * bstock-titel bevat dat meestal wel (bv. "Martin Audio AQ112 Subwoofer",
@@ -11,7 +14,7 @@
  * vóór het vergelijken.
  *
  * Uitvoeren:
- *     node link_products.js
+ *     node link_products.js [merk-id]
  */
 
 const pool = require("./db");
@@ -68,20 +71,63 @@ function cleanName(title, brandPrefixes) {
     .trim();
 }
 
+/** Normaliseert een naam enkel voor vergelijkingsdoeleinden: haakjes (en hun
+ * inhoud) en koppeltekens worden genegeerd, zodat bv. "PLX1000" matcht met
+ * het bestaande "PLX-1000" en "VM-50 actieve DJ-monitor" met het bestaande
+ * "VM-50 actieve DJ-monitor (per stuk)" (waar de haakjes wél bij de officiële
+ * naam horen). De opgeslagen/weergegeven naam blijft altijd ongewijzigd —
+ * dit wordt uitsluitend gebruikt om te bepalen of twee namen "hetzelfde"
+ * product zijn. */
+function normalizeForMatching(name) {
+  return name
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)/g, "")
+    .replace(/-/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Zoekt het product waarvan de naam een prefix is van `name`, op een woordgrens. */
 function findPrefixMatch(name, candidates) {
-  const nameLower = name.toLowerCase();
+  const nameNorm = normalizeForMatching(name);
 
   return candidates.find((p) => {
-    const prefix = p.name.toLowerCase();
-    if (!nameLower.startsWith(prefix)) return false;
-    const nextChar = nameLower[prefix.length];
+    const prefixNorm = normalizeForMatching(p.name);
+    if (!nameNorm.startsWith(prefixNorm)) return false;
+    const nextChar = nameNorm[prefixNorm.length];
     return nextChar === undefined || /\s/.test(nextChar);
   });
 }
 
+/** Omgekeerde van findPrefixMatch: de (opgekuiste) b-stock naam is een prefix
+ * van de productnaam — bv. b-stock "DM-50D-BT desktop monitorenset" vs. het
+ * bestaande product "DM-50D-BT desktop monitorenset met Bluetooth", waar de
+ * leverancier een deel van de omschrijving weglaat. Enkel toegepast als
+ * precies één product matcht: anders is de b-stock titel te generiek/kort om
+ * veilig te kiezen welk product bedoeld wordt. */
+function findReversePrefixMatch(name, candidates) {
+  const nameNorm = normalizeForMatching(name);
+  if (nameNorm.length < 4) return undefined;
+
+  const matches = candidates.filter((p) => {
+    const candNorm = normalizeForMatching(p.name);
+    if (!candNorm.startsWith(nameNorm)) return false;
+    const nextChar = candNorm[nameNorm.length];
+    return nextChar === undefined || /\s/.test(nextChar);
+  });
+
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 async function run() {
-  await log(null, "Start van link_products.js", "start");
+  const brandId = process.argv[2] ? parseInt(process.argv[2], 10) : null;
+  if (process.argv[2] && (!Number.isInteger(brandId) || brandId < 1)) {
+    console.error("Gebruik: node link_products.js [merk-id]");
+    console.error("Merk-id moet een geheel getal groter dan of gelijk aan 1 zijn.");
+    process.exit(1);
+  }
+
+  await log(null, brandId ? `Start van link_products.js (merk-id ${brandId})` : "Start van link_products.js", "start");
 
   const [brands] = await pool.query("SELECT id, name, first_word FROM brand");
   const brandPrefixesById = new Map(
@@ -93,7 +139,9 @@ async function run() {
   );
 
   const [products] = await pool.query("SELECT id, brand_id, name FROM product");
-  const productIdByKey = new Map(products.map((p) => [`${p.brand_id}::${p.name}`, p.id]));
+  const productIdByKey = new Map(
+    products.map((p) => [`${p.brand_id}::${normalizeForMatching(p.name)}`, p.id])
+  );
 
   // Per merk gesorteerd op naam-lengte (langste eerst), zodat een specifiekere
   // productnaam voorrang krijgt op een kortere die toevallig ook een prefix is.
@@ -108,9 +156,10 @@ async function run() {
     candidates.sort((a, b) => b.name.length - a.name.length);
   }
 
-  const [bstockProducts] = await pool.query(
-    "SELECT id, brand_id, title FROM bstock_product WHERE brand_id IS NOT NULL AND (product_id IS NULL OR product_id = 0)"
-  );
+  const bstockQuery = brandId
+    ? "SELECT id, brand_id, title FROM bstock_product WHERE brand_id = ? AND (product_id IS NULL OR product_id = 0)"
+    : "SELECT id, brand_id, title FROM bstock_product WHERE brand_id IS NOT NULL AND (product_id IS NULL OR product_id = 0)";
+  const [bstockProducts] = await pool.query(bstockQuery, brandId ? [brandId] : []);
 
   console.log(`${bstockProducts.length} bstock_product(en) zonder product_id gevonden.`);
 
@@ -119,12 +168,17 @@ async function run() {
 
   for (const bp of bstockProducts) {
     const name = cleanName(bp.title, brandPrefixesById.get(bp.brand_id) || []);
-    const key = `${bp.brand_id}::${name}`;
+    const key = `${bp.brand_id}::${normalizeForMatching(name)}`;
 
     let productId = productIdByKey.get(key);
 
     if (!productId) {
       const match = findPrefixMatch(name, productsByBrand.get(bp.brand_id) || []);
+      if (match) productId = match.id;
+    }
+
+    if (!productId) {
+      const match = findReversePrefixMatch(name, productsByBrand.get(bp.brand_id) || []);
       if (match) productId = match.id;
     }
 
@@ -145,7 +199,13 @@ async function run() {
   }
 
   console.log(`\n✓ ${linked} bstock_product(en) gekoppeld aan een product.`);
-  await log(null, `Einde van link_products.js: ${linked} gekoppeld`, "success");
+  await log(
+    null,
+    brandId
+      ? `Einde van link_products.js (merk-id ${brandId}): ${linked} gekoppeld`
+      : `Einde van link_products.js: ${linked} gekoppeld`,
+    "success"
+  );
 
   await pool.end();
 }

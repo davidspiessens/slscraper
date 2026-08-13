@@ -51,7 +51,7 @@ $productsSql = "
         GROUP BY bstock_product_id
     ) pr ON pr.bstock_product_id = p.id
     WHERE p.brand_id = ? AND p.ignored = 0
-    ORDER BY p.archived ASC, p.title ASC
+    ORDER BY p.archived ASC, p.created DESC
 ";
 
 $productsStmt = $mysqli->prepare($productsSql);

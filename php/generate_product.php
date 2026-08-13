@@ -45,11 +45,25 @@ if ($bstockProduct['brand_id'] && !$bstockProduct['product_id']) {
     $name = clean_product_name($bstockProduct['title'], $brandPrefixes);
 
     if ($name !== '') {
-        $findStmt = $mysqli->prepare('SELECT id FROM product WHERE brand_id = ? AND name = ?');
-        $findStmt->bind_param('is', $bstockProduct['brand_id'], $name);
-        $findStmt->execute();
-        $existing = $findStmt->get_result()->fetch_assoc();
-        $findStmt->close();
+        // Genormaliseerd vergelijken (haakjes/koppeltekens genegeerd) i.p.v. een
+        // exacte match, anders ontstaat een dubbel product zodra de opgekuiste
+        // b-stock titel net iets anders is dan de bestaande naam (bv. "PLX1000"
+        // vs. het bestaande "PLX-1000", of haakjes die wél bij de naam horen
+        // zoals "VM-50 actieve DJ-monitor (per stuk)").
+        $candidatesStmt = $mysqli->prepare('SELECT id, name FROM product WHERE brand_id = ?');
+        $candidatesStmt->bind_param('i', $bstockProduct['brand_id']);
+        $candidatesStmt->execute();
+        $candidates = $candidatesStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $candidatesStmt->close();
+
+        $normalizedName = normalize_for_matching($name);
+        $existing = null;
+        foreach ($candidates as $candidate) {
+            if (normalize_for_matching($candidate['name']) === $normalizedName) {
+                $existing = $candidate;
+                break;
+            }
+        }
 
         if ($existing) {
             $productId = (int) $existing['id'];

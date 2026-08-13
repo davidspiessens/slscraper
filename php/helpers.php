@@ -85,6 +85,20 @@ function clean_product_name(string $title, array $brandPrefixes = []): string
     return trim($name);
 }
 
+/** Normaliseert een naam enkel voor vergelijkingsdoeleinden: haakjes (en hun
+ * inhoud) en koppeltekens worden genegeerd, zodat bv. "PLX1000" matcht met
+ * het bestaande "PLX-1000" en "VM-50 actieve DJ-monitor" met het bestaande
+ * "VM-50 actieve DJ-monitor (per stuk)" (waar de haakjes wél bij de officiële
+ * naam horen). Zie ook link_products.js/create_products.js. */
+function normalize_for_matching(string $name): string
+{
+    $normalized = mb_strtolower($name);
+    $normalized = preg_replace('/\s*\([^)]*\)/', '', $normalized);
+    $normalized = str_replace('-', '', $normalized);
+    $normalized = preg_replace('/\s+/', ' ', $normalized);
+    return trim($normalized);
+}
+
 /** Normaliseert een woord voor zoekvergelijking: lowercase, leestekens rond het woord weg. */
 function normalize_search_word(string $word): string
 {

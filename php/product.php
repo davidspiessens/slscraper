@@ -14,7 +14,7 @@ if (!$productId) {
 $mysqli = get_db_connection();
 
 $productStmt = $mysqli->prepare(
-    'SELECT p.id, p.name, p.ean, p.archived, p.created,
+    'SELECT p.id, p.name, p.ean, p.archived, p.ignored, p.created,
             b.id AS brand_id, b.name AS brand_name, b.weight
      FROM product p
      LEFT JOIN brand b ON b.id = p.brand_id
@@ -197,6 +197,16 @@ $productFullName = trim(($product['brand_name'] ?? '') . ' ' . $product['name'])
     </p>
     <p class="meta">EAN: <?= $product['ean'] !== null ? htmlspecialchars($product['ean']) : '-' ?></p>
     <p class="meta">Product aangemaakt: <?= htmlspecialchars($product['created']) ?></p>
+    <p class="meta">
+        Genegeerd: <?= $product['ignored'] ? 'Ja' : 'Nee' ?>
+        <?php if (!$product['ignored']): ?>
+            <form method="post" action="ignore_product.php" style="display:inline;">
+                <input type="hidden" name="id" value="<?= (int) $product['id'] ?>">
+                <input type="hidden" name="redirect" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php') ?>">
+                <button type="submit" title="Negeren" onclick="return confirm('Dit product negeren?');">&#128683;</button>
+            </form>
+        <?php endif; ?>
+    </p>
     <p class="meta">Laagste prijs: <?= euro($minPrice) ?> &nbsp;|&nbsp; Hoogste prijs: <?= euro($maxPrice) ?></p>
     <p class="meta"><a href="add_purchase.php?product_id=<?= (int) $product['id'] ?>">Aankoop registreren &rarr;</a></p>
 
