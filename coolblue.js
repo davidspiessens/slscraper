@@ -34,6 +34,7 @@
 
 const { chromium } = require("playwright");
 const pool = require("./db");
+const { log } = require("./logger");
 
 const BASE_URL = "https://www.coolblue.be";
 const SUPPLIER = 13; // Coolblue
@@ -381,6 +382,8 @@ async function scrape() {
   });
   const page = await context.newPage();
 
+  await log(SUPPLIER, "Start van coolblue.js");
+
   let totalFound = 0;
   let totalSaved = 0;
   let isFirstRequest = true;
@@ -428,12 +431,15 @@ async function scrape() {
 
     const saved = await saveProducts(products);
     totalSaved += saved;
+    await log(SUPPLIER, `Pagina (${type}) ${url}: ${scraped.length} gevonden, ${saved} opgeslagen`);
   }
 
   await browser.close();
-  await pool.end();
 
   console.log(`\n✓ ${totalSaved} product(en) opgeslagen in de database (${totalFound} gevonden).`);
+  await log(SUPPLIER, `Einde van coolblue.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`);
+
+  await pool.end();
 }
 
 scrape();

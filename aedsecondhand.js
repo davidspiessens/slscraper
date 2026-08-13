@@ -9,6 +9,7 @@
  */
 
 const pool = require("./db");
+const { log } = require("./logger");
 
 const BASE_URL = "https://secondhand.aedgroup.com";
 const FEED_URL = `${BASE_URL}/shop?pagesize=10000&feed=true&DoNotShowVariantsAsSingleProducts=True`;
@@ -123,6 +124,8 @@ async function saveProducts(products) {
 }
 
 async function scrape() {
+  await log(SUPPLIER, "Start van aedsecondhand.js");
+
   console.log(`Feed: ${FEED_URL}`);
   const products = await fetchProducts();
 
@@ -138,9 +141,12 @@ async function scrape() {
   }
 
   const saved = await saveProducts(unique);
-  await pool.end();
+  await log(SUPPLIER, `Feed: ${products.length} gevonden, ${saved} opgeslagen`);
 
   console.log(`\n✓ ${saved} product(en) opgeslagen in de database (${products.length} gevonden)`);
+  await log(SUPPLIER, `Einde van aedsecondhand.js: ${saved} opgeslagen (${products.length} gevonden)`);
+
+  await pool.end();
 }
 
 scrape().catch((err) => {

@@ -7,10 +7,13 @@
  */
 
 const pool = require("./db");
+const { log } = require("./logger");
 
 const SUPPLIER = 4; // XLR Pro
 
 async function run() {
+  await log(SUPPLIER, "Start van archive_soldout_xlrpro.js");
+
   const [result] = await pool.query(
     `
     UPDATE bstock_product bp
@@ -32,6 +35,7 @@ async function run() {
   );
 
   console.log(`✓ ${result.affectedRows} uitverkocht(e) xlrpro-product(en) gearchiveerd.`);
+  await log(SUPPLIER, `Einde van archive_soldout_xlrpro.js: ${result.affectedRows} gearchiveerd`);
 
   await pool.end();
 }

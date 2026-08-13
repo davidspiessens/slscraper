@@ -15,6 +15,7 @@
  */
 
 const pool = require("./db");
+const { log } = require("./logger");
 
 // Voorvoegsel: bax "(B-Stock) ", progear "B-stock: ". Titels zonder
 // voorvoegsel (xlrpro, aedsecondhand, soundsale) blijven ongewijzigd.
@@ -80,6 +81,8 @@ function findPrefixMatch(name, candidates) {
 }
 
 async function run() {
+  await log(null, "Start van link_products.js");
+
   const [brands] = await pool.query("SELECT id, name, first_word FROM brand");
   const brandPrefixesById = new Map(
     brands.map((b) => {
@@ -142,6 +145,7 @@ async function run() {
   }
 
   console.log(`\n✓ ${linked} bstock_product(en) gekoppeld aan een product.`);
+  await log(null, `Einde van link_products.js: ${linked} gekoppeld`);
 
   await pool.end();
 }

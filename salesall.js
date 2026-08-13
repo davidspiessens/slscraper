@@ -13,6 +13,7 @@
 
 const { chromium } = require("playwright");
 const pool = require("./db");
+const { log } = require("./logger");
 
 const startPage = process.argv[2] ? parseInt(process.argv[2], 10) : 1;
 if (!Number.isInteger(startPage) || startPage < 1) {
@@ -148,6 +149,8 @@ async function scrape() {
   });
   const page = await context.newPage();
 
+  await log(SUPPLIER, "Start van salesall.js");
+
   let currentUrl = START_URL;
   let pageNum = startPage;
   let totalFound = 0;
@@ -181,6 +184,7 @@ async function scrape() {
     const saved = await saveProducts(unique);
     totalSaved += saved;
     console.log(`  → ${products.length} producten gevonden, ${saved} opgeslagen (totaal opgeslagen: ${totalSaved})`);
+    await log(SUPPLIER, `Pagina ${pageNum}: ${products.length} gevonden, ${saved} opgeslagen`);
 
     const nextUrl = await getNextPageUrl(page);
     currentUrl = nextUrl && nextUrl !== currentUrl ? nextUrl : null;
@@ -193,9 +197,11 @@ async function scrape() {
   }
 
   await browser.close();
-  await pool.end();
 
   console.log(`\n✓ ${totalSaved} product(en) opgeslagen in de database (${totalFound} gevonden)`);
+  await log(SUPPLIER, `Einde van salesall.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`);
+
+  await pool.end();
 }
 
 scrape();

@@ -7,6 +7,7 @@
  */
 
 const pool = require("./db");
+const { log } = require("./logger");
 
 const supplierId = process.argv[2] ? parseInt(process.argv[2], 10) : NaN;
 if (!Number.isInteger(supplierId) || supplierId < 1) {
@@ -16,6 +17,8 @@ if (!Number.isInteger(supplierId) || supplierId < 1) {
 }
 
 async function archive() {
+  await log(supplierId, "Start van archive_products.js");
+
   await pool.query(`UPDATE bstock_product SET archived = FALSE WHERE supplier_id = ?`, [
     supplierId,
   ]);
@@ -37,6 +40,7 @@ async function archive() {
   );
 
   console.log(`✓ ${result.affectedRows} product(en) van leverancier ${supplierId} gearchiveerd.`);
+  await log(supplierId, `Einde van archive_products.js: ${result.affectedRows} gearchiveerd`);
 
   await pool.end();
 }

@@ -8,6 +8,7 @@
  */
 
 const pool = require("./db");
+const { log } = require("./logger");
 
 // Strip een optioneel B-stock-voorvoegsel in eender welke vorm:
 // bax-shop: "(B-Stock) ", progear: "B-stock: ". Titels zonder voorvoegsel
@@ -73,6 +74,8 @@ function extractFirstWord(title) {
 }
 
 async function run() {
+  await log(null, "Start van link_brands.js");
+
   const [brandRows] = await pool.query("SELECT id, name, first_word FROM brand ORDER BY id ASC");
   const [products] = await pool.query("SELECT id, title FROM bstock_product WHERE brand_id IS NULL");
 
@@ -144,6 +147,7 @@ async function run() {
   }
 
   console.log(`\n✓ ${totalLinked} product(en) gekoppeld aan een merk.`);
+  await log(null, `Einde van link_brands.js: ${totalLinked} product(en) gekoppeld`);
 
   await pool.end();
 }

@@ -8,6 +8,7 @@
  */
 
 const pool = require("./db");
+const { log } = require("./logger");
 
 // cuesale-titels hebben geen betrouwbaar merk-scheidingsteken (geen pipes,
 // geen B-stock-voorvoegsel — gewoon "Merk Model" of soms enkel "Model").
@@ -140,6 +141,8 @@ function isPrefixOfExistingLongerBrand(candidate, existingNames) {
 }
 
 async function run() {
+  await log(null, "Start van brands.js");
+
   const [rows] = await pool.query(
     "SELECT DISTINCT title FROM bstock_product WHERE brand_id IS NULL AND supplier_id != ?",
     [CUESALE_SUPPLIER_ID]
@@ -209,6 +212,7 @@ async function run() {
   }
 
   console.log(`\n✓ ${created} nieuw(e) merk(en) opgeslagen in de database.`);
+  await log(null, `Einde van brands.js: ${created} nieuw(e) merk(en) opgeslagen`);
 
   await pool.end();
 }
