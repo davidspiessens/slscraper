@@ -51,7 +51,7 @@ const PRODUCT_CARD_SELECTOR = ".product-card";
 // zoals bij de andere scrapers. Elk paar (url, type) bepaalt welke
 // extractielogica in getProductsOnPage gebruikt wordt.
 const TARGETS = [
-  { url: `${BASE_URL}/nl/zoeken/producttype:laptops?query=tweedekans%20mac`, type: "search" },
+  { url: `${BASE_URL}/nl/laptops/apple/tweedekans`, type: "category" },
   { url: `${BASE_URL}/nl/desktops/apple/tweedekans`, type: "category" },
   { url: `${BASE_URL}/nl/dj-gear/tweedekans`, type: "category" },
 ];

@@ -172,7 +172,11 @@ async function scrape() {
 
   while (currentUrl) {
     console.log(`Pagina ${pageNum}: ${currentUrl}`);
-    await page.goto(currentUrl, { waitUntil: "networkidle", timeout: 30000 });
+    // "networkidle" resolveert hier soms nooit (blijvende achtergrond-
+    // verbindingen, tracking/analytics) — "load" + de expliciete
+    // waitForSelector hieronder is voldoende om te weten dat de
+    // productkaarten er staan (zie ook musicstore.js).
+    await page.goto(currentUrl, { waitUntil: "load", timeout: 30000 });
 
     // Accept cookies - to be tested
     // if (pageNum === startPage) {
