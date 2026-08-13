@@ -74,7 +74,7 @@ function extractFirstWord(title) {
 }
 
 async function run() {
-  await log(null, "Start van link_brands.js");
+  await log(null, "Start van link_brands.js", "start");
 
   const [brandRows] = await pool.query("SELECT id, name, first_word FROM brand ORDER BY id ASC");
   const [products] = await pool.query("SELECT id, title FROM bstock_product WHERE brand_id IS NULL");
@@ -147,12 +147,13 @@ async function run() {
   }
 
   console.log(`\n✓ ${totalLinked} product(en) gekoppeld aan een merk.`);
-  await log(null, `Einde van link_brands.js: ${totalLinked} product(en) gekoppeld`);
+  await log(null, `Einde van link_brands.js: ${totalLinked} product(en) gekoppeld`, "success");
 
   await pool.end();
 }
 
-run().catch((err) => {
+run().catch(async (err) => {
   console.error(err);
+  await log(null, `Fout in link_brands.js: ${err.message}`, "error");
   process.exit(1);
 });

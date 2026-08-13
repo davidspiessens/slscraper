@@ -158,7 +158,7 @@ async function scrape() {
   });
   const page = await context.newPage();
 
-  await log(SUPPLIER, "Start van thomann.js");
+  await log(SUPPLIER, "Start van thomann.js", "start");
 
   let totalPages = null;
   let totalFound = 0;
@@ -174,7 +174,7 @@ async function scrape() {
       await page.waitForSelector(PRODUCT_CARD_SELECTOR, { timeout: 15000 });
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
-      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${url}), scrape gestopt.`);
+      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${url}), scrape gestopt.`, "warning");
       break;
     }
 
@@ -210,9 +210,13 @@ async function scrape() {
   await browser.close();
 
   console.log(`\n✓ ${totalSaved} product(en) opgeslagen in de database (${totalFound} gevonden)`);
-  await log(SUPPLIER, `Einde van thomann.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`);
+  await log(SUPPLIER, `Einde van thomann.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`, "success");
 
   await pool.end();
 }
 
-scrape();
+scrape().catch(async (err) => {
+  console.error(err);
+  await log(SUPPLIER, `Fout in thomann.js: ${err.message}`, "error");
+  process.exit(1);
+});

@@ -206,7 +206,7 @@ async function scrape() {
       await page.waitForSelector(".result", { timeout: 15000 });
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
-      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${currentUrl}), scrape gestopt.`);
+      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${currentUrl}), scrape gestopt.`, "warning");
       break;
     }
 
@@ -254,4 +254,8 @@ async function scrape() {
   );
 }
 
-scrape();
+scrape().catch(async (err) => {
+  console.error(err);
+  await log(SUPPLIER, `Fout in bax-new-products.js: ${err.message}`, "error");
+  process.exit(1);
+});

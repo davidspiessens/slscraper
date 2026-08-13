@@ -81,7 +81,7 @@ function findPrefixMatch(name, candidates) {
 }
 
 async function run() {
-  await log(null, "Start van link_products.js");
+  await log(null, "Start van link_products.js", "start");
 
   const [brands] = await pool.query("SELECT id, name, first_word FROM brand");
   const brandPrefixesById = new Map(
@@ -145,12 +145,13 @@ async function run() {
   }
 
   console.log(`\n✓ ${linked} bstock_product(en) gekoppeld aan een product.`);
-  await log(null, `Einde van link_products.js: ${linked} gekoppeld`);
+  await log(null, `Einde van link_products.js: ${linked} gekoppeld`, "success");
 
   await pool.end();
 }
 
-run().catch((err) => {
+run().catch(async (err) => {
   console.error(err);
+  await log(null, `Fout in link_products.js: ${err.message}`, "error");
   process.exit(1);
 });

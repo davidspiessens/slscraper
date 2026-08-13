@@ -124,7 +124,7 @@ async function saveProducts(products) {
 }
 
 async function scrape() {
-  await log(SUPPLIER, "Start van aedsecondhand.js");
+  await log(SUPPLIER, "Start van aedsecondhand.js", "start");
 
   console.log(`Feed: ${FEED_URL}`);
   const products = await fetchProducts();
@@ -144,12 +144,13 @@ async function scrape() {
   await log(SUPPLIER, `Feed: ${products.length} gevonden, ${saved} opgeslagen`);
 
   console.log(`\n✓ ${saved} product(en) opgeslagen in de database (${products.length} gevonden)`);
-  await log(SUPPLIER, `Einde van aedsecondhand.js: ${saved} opgeslagen (${products.length} gevonden)`);
+  await log(SUPPLIER, `Einde van aedsecondhand.js: ${saved} opgeslagen (${products.length} gevonden)`, "success");
 
   await pool.end();
 }
 
-scrape().catch((err) => {
+scrape().catch(async (err) => {
   console.error(err);
+  await log(SUPPLIER, `Fout in aedsecondhand.js: ${err.message}`, "error");
   process.exit(1);
 });

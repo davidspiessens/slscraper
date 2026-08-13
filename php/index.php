@@ -155,6 +155,7 @@ $mysqli->close();
 
     <p class="meta">Aankopen: <a href="purchases.php">Overzicht</a> - <a href="add_purchase.php">Nieuwe aankoop</a></p>
     <p class="meta">Verkopen: <a href="sales.php">Overzicht</a> - <a href="add_sale.php">Nieuwe verkoop</a></p>
+    <p class="meta">Scraper runs: <a href="runs.php">Overzicht</a></p>
 
     <h2>Merken <small>(<a href="manage_brands.php">Beheer merken</a>)</small></h2>
     

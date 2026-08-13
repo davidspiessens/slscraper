@@ -146,7 +146,7 @@ async function scrape() {
   });
   const page = await context.newPage();
 
-  await log(SUPPLIER, "Start van progear.js");
+  await log(SUPPLIER, "Start van progear.js", "start");
 
   let currentUrl = START_URL;
   let pageNum = 1;
@@ -170,7 +170,7 @@ async function scrape() {
       );
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
-      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${currentUrl}), scrape gestopt.`);
+      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${currentUrl}), scrape gestopt.`, "warning");
       return;
     }
 
@@ -205,9 +205,13 @@ async function scrape() {
   await browser.close();
 
   console.log(`\n✓ ${totalSaved} product(en) opgeslagen in de database (${totalFound} gevonden)`);
-  await log(SUPPLIER, `Einde van progear.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`);
+  await log(SUPPLIER, `Einde van progear.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`, "success");
 
   await pool.end();
 }
 
-scrape();
+scrape().catch(async (err) => {
+  console.error(err);
+  await log(SUPPLIER, `Fout in progear.js: ${err.message}`, "error");
+  process.exit(1);
+});

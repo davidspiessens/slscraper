@@ -17,7 +17,7 @@ if (!Number.isInteger(supplierId) || supplierId < 1) {
 }
 
 async function archive() {
-  await log(supplierId, "Start van archive_products.js");
+  await log(supplierId, "Start van archive_products.js", "start");
 
   await pool.query(`UPDATE bstock_product SET archived = FALSE WHERE supplier_id = ?`, [
     supplierId,
@@ -40,12 +40,13 @@ async function archive() {
   );
 
   console.log(`✓ ${result.affectedRows} product(en) van leverancier ${supplierId} gearchiveerd.`);
-  await log(supplierId, `Einde van archive_products.js: ${result.affectedRows} gearchiveerd`);
+  await log(supplierId, `Einde van archive_products.js: ${result.affectedRows} gearchiveerd`, "success");
 
   await pool.end();
 }
 
-archive().catch((err) => {
+archive().catch(async (err) => {
   console.error(err);
+  await log(supplierId, `Fout in archive_products.js: ${err.message}`, "error");
   process.exit(1);
 });

@@ -141,7 +141,7 @@ function isPrefixOfExistingLongerBrand(candidate, existingNames) {
 }
 
 async function run() {
-  await log(null, "Start van brands.js");
+  await log(null, "Start van brands.js", "start");
 
   const [rows] = await pool.query(
     "SELECT DISTINCT title FROM bstock_product WHERE brand_id IS NULL AND supplier_id != ?",
@@ -212,12 +212,13 @@ async function run() {
   }
 
   console.log(`\n✓ ${created} nieuw(e) merk(en) opgeslagen in de database.`);
-  await log(null, `Einde van brands.js: ${created} nieuw(e) merk(en) opgeslagen`);
+  await log(null, `Einde van brands.js: ${created} nieuw(e) merk(en) opgeslagen`, "success");
 
   await pool.end();
 }
 
-run().catch((err) => {
+run().catch(async (err) => {
   console.error(err);
+  await log(null, `Fout in brands.js: ${err.message}`, "error");
   process.exit(1);
 });

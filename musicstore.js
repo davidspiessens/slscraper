@@ -155,7 +155,7 @@ async function scrape() {
   });
   const page = await context.newPage();
 
-  await log(SUPPLIER, "Start van musicstore.js");
+  await log(SUPPLIER, "Start van musicstore.js", "start");
 
   let totalPages = null;
   let totalFound = 0;
@@ -190,7 +190,7 @@ async function scrape() {
 
     if (!cardsFound) {
       console.log("  ⚠ Deze pagina overgeslagen na 3 mislukte pogingen.");
-      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${url}) na 3 pogingen, pagina overgeslagen.`);
+      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${url}) na 3 pogingen, pagina overgeslagen.`, "warning");
       continue;
     }
 
@@ -226,9 +226,13 @@ async function scrape() {
   await browser.close();
 
   console.log(`\n✓ ${totalSaved} product(en) opgeslagen in de database (${totalFound} gevonden)`);
-  await log(SUPPLIER, `Einde van musicstore.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`);
+  await log(SUPPLIER, `Einde van musicstore.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`, "success");
 
   await pool.end();
 }
 
-scrape();
+scrape().catch(async (err) => {
+  console.error(err);
+  await log(SUPPLIER, `Fout in musicstore.js: ${err.message}`, "error");
+  process.exit(1);
+});

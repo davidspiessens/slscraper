@@ -12,7 +12,7 @@ const { log } = require("./logger");
 const SUPPLIER = 4; // XLR Pro
 
 async function run() {
-  await log(SUPPLIER, "Start van archive_soldout_xlrpro.js");
+  await log(SUPPLIER, "Start van archive_soldout_xlrpro.js", "start");
 
   const [result] = await pool.query(
     `
@@ -35,12 +35,13 @@ async function run() {
   );
 
   console.log(`✓ ${result.affectedRows} uitverkocht(e) xlrpro-product(en) gearchiveerd.`);
-  await log(SUPPLIER, `Einde van archive_soldout_xlrpro.js: ${result.affectedRows} gearchiveerd`);
+  await log(SUPPLIER, `Einde van archive_soldout_xlrpro.js: ${result.affectedRows} gearchiveerd`, "success");
 
   await pool.end();
 }
 
-run().catch((err) => {
+run().catch(async (err) => {
   console.error(err);
+  await log(SUPPLIER, `Fout in archive_soldout_xlrpro.js: ${err.message}`, "error");
   process.exit(1);
 });

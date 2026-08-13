@@ -362,6 +362,30 @@ function render_multi_price_chart(array $series): string
     return ob_get_clean();
 }
 
+/** Achtergrondkleur voor een log-status, zie runs.php/run.php. */
+function log_status_color(string $status): string
+{
+    return match ($status) {
+        'success' => '#d4f7d4',
+        'warning' => '#fff3cd',
+        'error' => '#f8d7da',
+        'incomplete' => '#eee',
+        default => '#fff',
+    };
+}
+
+/** Kort symbool voor een log-status, zie runs.php/run.php. */
+function log_status_symbol(string $status): string
+{
+    return match ($status) {
+        'success' => '&#10003;',   // ✓
+        'warning' => '&#9888;',    // ⚠
+        'error' => '&#10007;',     // ✗
+        'incomplete' => '&hellip;',
+        default => '?',
+    };
+}
+
 /** Rendert een <tr> met de kolommen die alle producttabellen gemeen hebben. */
 function render_product_row(array $row, bool $showGenerateAction = false): void
 {
