@@ -48,7 +48,7 @@ $NODE $DIR/thomann.js && $NODE $DIR/archive_products.js 14
 $NODE $DIR/brands.js
 $NODE $DIR/link_brands.js
 $NODE $DIR/link_products.js
-$NODE $DIR/musicstore.js && $NODE $DIR/archive_products.js 15
-$NODE $DIR/brands.js
-$NODE $DIR/link_brands.js
-$NODE $DIR/link_products.js
+# $NODE $DIR/musicstore.js && $NODE $DIR/archive_products.js 15
+# $NODE $DIR/brands.js
+# $NODE $DIR/link_brands.js
+# $NODE $DIR/link_products.js
