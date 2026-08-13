@@ -254,6 +254,23 @@ async function expandWithVariants(page, prod) {
     // dan terecht [] terug.
   }
 
+  // De "Staat"-fieldset rendert soms pas ná de "Variant"-fieldset (aparte
+  // hydration/fetch) — zonder deze extra wacht leest getStaatOptionValues()
+  // hieronder soms te vroeg [] uit, waardoor nooit op de andere staat-optie
+  // geklikt wordt en varianten onder die staat blijvend gemist worden (ze
+  // worden dan na verloop van tijd stil gearchiveerd wegens geen prijs-
+  // update meer, zie ook: id 13283 "AlphaTheta Omnis-Duo" bleef steken
+  // terwijl 13270, dezelfde base-product/andere staat, wel bleef bijwerken).
+  try {
+    await page.waitForFunction(
+      () => Array.from(document.querySelectorAll("legend")).some((el) => el.textContent.trim() === "Staat"),
+      { timeout: 5000 }
+    );
+  } catch (err) {
+    // Geen "Staat"-fieldset binnen 5s verschenen — normaal geval voor
+    // producten zonder conditie-variant.
+  }
+
   const readVariants = new Function(`
     ${parsePrice.toString()}
     ${extractVariants.toString()}
