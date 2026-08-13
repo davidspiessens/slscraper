@@ -186,6 +186,7 @@ async function scrape() {
       );
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
+      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${currentUrl}), scrape gestopt.`);
       process.exit(1);
     }
 

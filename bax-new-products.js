@@ -11,6 +11,7 @@
 
 const { chromium } = require("playwright");
 const pool = require("./db");
+const { log } = require("./logger");
 
 const keyword = process.argv[2];
 if (!keyword) {
@@ -205,6 +206,7 @@ async function scrape() {
       await page.waitForSelector(".result", { timeout: 15000 });
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
+      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${currentUrl}), scrape gestopt.`);
       break;
     }
 

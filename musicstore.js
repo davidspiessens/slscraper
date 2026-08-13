@@ -190,6 +190,7 @@ async function scrape() {
 
     if (!cardsFound) {
       console.log("  ⚠ Deze pagina overgeslagen na 3 mislukte pogingen.");
+      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${url}) na 3 pogingen, pagina overgeslagen.`);
       continue;
     }
 

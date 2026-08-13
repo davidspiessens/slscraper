@@ -169,6 +169,7 @@ async function scrape() {
       await page.waitForSelector(PRODUCT_CARD_SELECTOR, { timeout: 15000 });
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
+      await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${currentUrl}), scrape gestopt.`);
       break;
     }
 
