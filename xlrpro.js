@@ -10,7 +10,7 @@ if (!Number.isInteger(startPage) || startPage < 1) {
 }
 
 const BASE_URL = "https://www.xlrpro.eu";
-const QUERY = "tags=8&tags=36&tags=40";
+const QUERY = "search=second+hand&order=name+asc";
 const SEARCH_URL = `${BASE_URL}/shop?${QUERY}`;
 const START_URL = startPage > 1 ? `${BASE_URL}/shop/page/${startPage}?${QUERY}` : SEARCH_URL;
 const SUPPLIER = 4; // XLR Pro
