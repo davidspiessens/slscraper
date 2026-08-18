@@ -17,7 +17,12 @@ const SUPPLIER = 4; // XLR Pro
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const PRODUCT_CARD_SELECTOR = "td.oe_product";
+// xlrpro.eu (Odoo) toonde productkaarten vroeger als <td class="oe_product">
+// (tabel-layout); sinds ~18/08/2026 is dit een CSS-grid layout geworden met
+// <div class="oe_product ...">. Enkel op de class matchen i.p.v. het
+// element-type, zodat een volgende gelijkaardige layoutwissel niet opnieuw
+// alles stilzwijgend laat missen.
+const PRODUCT_CARD_SELECTOR = ".oe_product";
 
 /** Haal alle productkaarten op de huidige pagina op. */
 async function getProductsOnPage(page) {
@@ -37,10 +42,18 @@ async function getProductsOnPage(page) {
 
     cards.forEach((card) => {
       // --- Titel: merk + naam staan als aparte <span>'s in de titel-link ---
-      const titleLink = card.querySelector('h6.o_wsale_products_item_title a[itemprop="name"]');
+      // (was h6...[itemprop="name"], sinds de layoutwissel gewoon h2 zonder
+      // itemprop — enkel op de class matchen, niet op het element-type.)
+      // textContent i.p.v. innerText: op de nieuwe CSS-grid layout geeft
+      // innerText afhankelijk van het (nog niet volledig afgeronde) render-/
+      // layout-moment soms leeg terug voor sommige kaarten (getest: zowel
+      // meteen na waitForSelector als na scrollen faalden telkens andere
+      // kaarten) — textContent hangt niet af van layout/rendering en gaf in
+      // dezelfde test steevast alle 20/20 kaarten correct terug.
+      const titleLink = card.querySelector('.o_wsale_products_item_title a');
       const spans = titleLink ? titleLink.querySelectorAll("span") : [];
-      const brand = spans[0] ? spans[0].innerText.trim() : null;
-      const name = spans[1] ? spans[1].innerText.trim() : null;
+      const brand = spans[0] ? spans[0].textContent.trim() : null;
+      const name = spans[1] ? spans[1].textContent.trim() : null;
       const title = brand && name ? `${brand} ${name}` : name || brand;
 
       // --- URL ---
@@ -50,20 +63,21 @@ async function getProductsOnPage(page) {
       const idEl = card.querySelector("[data-product-template-id]");
       const id = idEl ? idEl.getAttribute("data-product-template-id") : null;
 
-      // --- Prijs nu: schone waarde via itemprop="price" (bv. "290.0") ---
-      const priceNowEl = card.querySelector('span[itemprop="price"]');
-      const priceNow = priceNowEl ? parseFloat(priceNowEl.innerText.trim()) : null;
+      // --- Prijs nu: was itemprop="price" met schone waarde ("290.0"), sinds
+      // de layoutwissel enkel nog .product_price .oe_currency_value met een
+      // Belgisch-geformatteerd getal ("290,00") — vandaar parseOdooPrice(). ---
+      const priceNowEl = card.querySelector(".product_price .oe_currency_value");
+      const priceNow = priceNowEl ? parseOdooPrice(priceNowEl.textContent) : null;
 
-      // --- Normale prijs: enkel aanwezig bij korting, in <del><em> ---
-      const priceOriginalEl = card.querySelector(
-        'del em[data-oe-expression*="base_price"] .oe_currency_value'
-      );
-      let priceOriginal = priceOriginalEl ? parseOdooPrice(priceOriginalEl.innerText) : null;
+      // --- Normale prijs: enkel aanwezig bij korting, in <del> binnen dezelfde .product_price ---
+      const priceOriginalEl = card.querySelector(".product_price del .oe_currency_value");
+      let priceOriginal = priceOriginalEl ? parseOdooPrice(priceOriginalEl.textContent) : null;
       if (priceOriginal == null || isNaN(priceOriginal)) priceOriginal = priceNow;
 
-      // --- Status/badge (bv. "Sold out") ---
-      const ribbonEl = card.querySelector(".o_ribbon");
-      const discount = ribbonEl ? ribbonEl.innerText.trim() || null : null;
+      // --- Status/badge (bv. "Sold out"/"Deal") — was .o_ribbon, sinds de
+      // layoutwissel .o_ribbons (meervoud) ---
+      const ribbonEl = card.querySelector(".o_ribbons");
+      const discount = ribbonEl ? ribbonEl.textContent.trim() || null : null;
 
       if (id && title && url) {
         results.push({ id, title, priceOriginal, priceNow, discount, url });
@@ -168,7 +182,7 @@ async function scrape() {
     await page.goto(currentUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
 
     try {
-      await page.waitForSelector("td.oe_product", { timeout: 15000 });
+      await page.waitForSelector(PRODUCT_CARD_SELECTOR, { timeout: 15000 });
     } catch (err) {
       console.log("  ⚠ Geen productkaarten gevonden op deze pagina.");
       await log(SUPPLIER, `Waarschuwing: geen productkaarten gevonden op pagina ${pageNum} (${currentUrl}), scrape gestopt.`, "warning");

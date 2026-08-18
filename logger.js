@@ -19,7 +19,7 @@ const path = require("path");
 const crypto = require("crypto");
 const pool = require("./db");
 
-const RUN_ID = process.env.RUN_ID || crypto.randomUUID();
+const RUN_ID = process.env.RUN_ID || null;
 const SCRIPT = path.basename(process.argv[1] || "unknown");
 
 async function log(supplierId, message, status = "info") {
