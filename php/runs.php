@@ -9,7 +9,7 @@ require __DIR__ . '/helpers.php';
 // hier) komen erna, alfabetisch.
 const RUN_SCRIPT_ORDER = [
     'bax.js', 'archive_products.js', 'aedsecondhand.js', 'xlrpro.js', 'archive_soldout_xlrpro.js',
-    'soundsale.js', 'progear.js', 'cuesale.js', 'salesall.js', 'kinxsound.js', 'coolblue.js',
+    'soundsale.js', 'progear.js', 'cuesale.js', 'salesall.js', 'kinxsound.js', 'kinxsoundconnect.js', 'coolblue.js',
     'thomann.js', 'musicstore.js', 'brands.js', 'link_brands.js', 'link_products.js',
 ];
 

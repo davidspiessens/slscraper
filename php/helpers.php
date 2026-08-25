@@ -400,8 +400,10 @@ function log_status_symbol(string $status): string
     };
 }
 
-/** Rendert een <tr> met de kolommen die alle producttabellen gemeen hebben. */
-function render_product_row(array $row, bool $showGenerateAction = false): void
+/** Rendert een <tr> met de kolommen die alle producttabellen gemeen hebben.
+ * $extraBadge (optioneel) wordt na de titel-links getoond, bv. het
+ * "gelijkaardig"-label op search.php bij een fuzzy match. */
+function render_product_row(array $row, bool $showGenerateAction = false, ?string $extraBadge = null): void
 {
     $redirectTarget = htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php');
     // Een product/bstock_product met een genegeerd merk telt ook als genegeerd.
@@ -417,6 +419,7 @@ function render_product_row(array $row, bool $showGenerateAction = false): void
                 &nbsp;<a href="product.php?id=<?= (int) $row['product_id'] ?>" title="Bekijk productoverzicht">&#128230;</a>
             <?php endif; ?>
             &nbsp;<a href="<?= htmlspecialchars($row['url']) ?>" target="_blank" rel="noopener" title="Bekijk op <?= htmlspecialchars($urlHost) ?>">&#8599;</a>
+            <?= $extraBadge ?? '' ?>
         </td>
         <td>
             <?php if ($row['brand_id']): ?>
