@@ -11,7 +11,7 @@ $sql = "
            pu.id AS purchase_id, pu.price AS purchase_price, pu.invoice_date AS purchase_invoice_date, pu.invoice_number AS purchase_invoice_number,
            p.id AS product_id, p.name AS product_name,
            b.id AS brand_id, b.name AS brand_name,
-           s.name AS supplier_name,
+           s.id AS supplier_id, s.name AS supplier_name,
            (sa.price - pu.price) AS profit
     FROM sale sa
     JOIN purchase pu ON pu.id = sa.purchase_id
@@ -104,7 +104,7 @@ $mysqli->close();
                             -
                         <?php endif; ?>
                     </td>
-                    <td><?= htmlspecialchars($row['supplier_name']) ?></td>
+                    <td><a href="supplier.php?id=<?= (int) $row['supplier_id'] ?>"><?= htmlspecialchars($row['supplier_name']) ?></a></td>
                     <td class="num"><?= euro((string) $row['purchase_price']) ?></td>
                     <td class="num"><?= euro((string) $row['sale_price']) ?></td>
                     <td class="num"><?= euro_excl((string) $row['profit']) ?></td>

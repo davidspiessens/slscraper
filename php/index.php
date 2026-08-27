@@ -42,7 +42,7 @@ $priceRangeJoin = "
 $commonSelect = "
     p.id, p.title, p.url, p.created AS product_created, p.product_id,
     b.id AS brand_id, b.name AS brand_name, b.weight, b.ignored AS brand_ignored,
-    sup.name AS supplier_name,
+    sup.id AS supplier_id, sup.name AS supplier_name,
     lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
     (lp.priceOriginal - lp.priceNow) AS price_diff,
     pr.highest_price, pr.lowest_price

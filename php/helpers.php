@@ -406,10 +406,17 @@ function log_status_symbol(string $status): string
 function render_product_row(array $row, bool $showGenerateAction = false, ?string $extraBadge = null): void
 {
     $redirectTarget = htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php');
-    // Een product/bstock_product met een genegeerd merk telt ook als genegeerd.
-    $rowStyle = (!empty($row['ignored']) || !empty($row['archived']) || !empty($row['brand_ignored']))
-        ? ' style="background-color: #f8d7da;"'
-        : '';
+    // Gearchiveerd (rood, ongewijzigd) en genegeerd (grijs) zijn twee
+    // verschillende toestanden — apart te onderscheiden i.p.v. dezelfde
+    // kleur. Een product/bstock_product met een genegeerd merk telt ook als
+    // genegeerd. Bij allebei tegelijk krijgt archived voorrang.
+    if (!empty($row['archived'])) {
+        $rowStyle = ' style="background-color: #f8d7da;"';
+    } elseif (!empty($row['ignored']) || !empty($row['brand_ignored'])) {
+        $rowStyle = ' style="background-color: #e2e3e5;"';
+    } else {
+        $rowStyle = '';
+    }
     $urlHost = preg_replace('/^www\./', '', (string) parse_url($row['url'], PHP_URL_HOST));
     ?>
     <tr<?= $rowStyle ?>>
@@ -428,7 +435,13 @@ function render_product_row(array $row, bool $showGenerateAction = false, ?strin
                 -
             <?php endif; ?>
         </td>
-        <td><?= isset($row['supplier_name']) ? htmlspecialchars($row['supplier_name']) : '-' ?></td>
+        <td>
+            <?php if (!empty($row['supplier_id']) && isset($row['supplier_name'])): ?>
+                <a href="supplier.php?id=<?= (int) $row['supplier_id'] ?>"><?= htmlspecialchars($row['supplier_name']) ?></a>
+            <?php else: ?>
+                <?= isset($row['supplier_name']) ? htmlspecialchars($row['supplier_name']) : '-' ?>
+            <?php endif; ?>
+        </td>
         <?php $isLowest = $row['lowest_price'] !== null && (float) $row['priceNow'] === (float) $row['lowest_price']; ?>
         <td class="num"><?= $row['weight'] === null ? '-' : htmlspecialchars((string) $row['weight']) ?></td>
         <td class="num"><?= euro($row['priceOriginal']) ?></td>

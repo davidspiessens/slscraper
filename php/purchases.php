@@ -10,7 +10,7 @@ $sql = "
     SELECT pu.id, pu.price, pu.invoice_date, pu.invoice_number,
            p.id AS product_id, p.name AS product_name,
            b.id AS brand_id, b.name AS brand_name,
-           s.name AS supplier_name,
+           s.id AS supplier_id, s.name AS supplier_name,
            bp.id AS bstock_product_id, bp.title AS bstock_title,
            sa.id AS sale_id, sa.price AS sale_price
     FROM purchase pu
@@ -105,7 +105,7 @@ $mysqli->close();
                             -
                         <?php endif; ?>
                     </td>
-                    <td><?= htmlspecialchars($row['supplier_name']) ?></td>
+                    <td><a href="supplier.php?id=<?= (int) $row['supplier_id'] ?>"><?= htmlspecialchars($row['supplier_name']) ?></a></td>
                     <td>
                         <?php if ($row['bstock_product_id']): ?>
                             <a href="bstock_product.php?id=<?= (int) $row['bstock_product_id'] ?>"><?= htmlspecialchars($row['bstock_title']) ?></a>

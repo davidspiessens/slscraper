@@ -94,7 +94,7 @@ if ($query !== '') {
         $bstockSql = "
             SELECT bp.id, bp.title, bp.url, bp.created AS product_created, bp.product_id, bp.ignored, bp.archived,
                    b.id AS brand_id, b.name AS brand_name, b.weight, b.ignored AS brand_ignored,
-                   sup.name AS supplier_name,
+                   sup.id AS supplier_id, sup.name AS supplier_name,
                    lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
                    (lp.priceOriginal - lp.priceNow) AS price_diff,
                    pr.highest_price, pr.lowest_price
@@ -159,7 +159,7 @@ if ($query !== '') {
             SELECT pu.id, pu.price, pu.invoice_date, pu.invoice_number,
                    p.id AS product_id, p.name AS product_name,
                    b.id AS brand_id, b.name AS brand_name,
-                   s.name AS supplier_name,
+                   s.id AS supplier_id, s.name AS supplier_name,
                    bp.id AS bstock_product_id, bp.title AS bstock_title,
                    sa.id AS sale_id, sa.price AS sale_price
             FROM purchase pu
@@ -187,7 +187,7 @@ if ($query !== '') {
                    pu.id AS purchase_id, pu.price AS purchase_price,
                    p.id AS product_id, p.name AS product_name,
                    b.id AS brand_id, b.name AS brand_name,
-                   s.name AS supplier_name,
+                   s.id AS supplier_id, s.name AS supplier_name,
                    (sa.price - pu.price) AS profit
             FROM sale sa
             JOIN purchase pu ON pu.id = sa.purchase_id
@@ -396,7 +396,7 @@ if ($query !== '') {
                                 -
                             <?php endif; ?>
                         </td>
-                        <td><?= htmlspecialchars($row['supplier_name']) ?></td>
+                        <td><a href="supplier.php?id=<?= (int) $row['supplier_id'] ?>"><?= htmlspecialchars($row['supplier_name']) ?></a></td>
                         <td>
                             <?php if ($row['bstock_product_id']): ?>
                                 <a href="bstock_product.php?id=<?= (int) $row['bstock_product_id'] ?>"><?= htmlspecialchars($row['bstock_title']) ?></a>
@@ -448,7 +448,7 @@ if ($query !== '') {
                                 -
                             <?php endif; ?>
                         </td>
-                        <td><?= htmlspecialchars($row['supplier_name']) ?></td>
+                        <td><a href="supplier.php?id=<?= (int) $row['supplier_id'] ?>"><?= htmlspecialchars($row['supplier_name']) ?></a></td>
                         <td class="num"><?= euro((string) $row['purchase_price']) ?></td>
                         <td class="num"><?= euro((string) $row['sale_price']) ?></td>
                         <td class="num"><?= euro_excl((string) $row['profit']) ?></td>
