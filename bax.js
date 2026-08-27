@@ -97,6 +97,27 @@ async function getOrCreateProductId(prod) {
   return result.insertId;
 }
 
+/**
+ * Sommige Bax-listings tonen een "extra X% korting met code: EXTRAX"-actie
+ * (bv. "SUMMER DEAL! 10% EXTRA KORTING MET CODE: EXTRA10", "15% extra
+ * B-stock korting met code: EXTRA15", "SOLDEN!"/"EINDSOLDEN!"-varianten) —
+ * de site past die korting pas toe bij het afrekenen met de code, dus de
+ * gescrapete prijs houdt er zelf geen rekening mee. Haalt het percentage uit
+ * de code zelf (EXTRA<n>) i.p.v. te vertrouwen op de precieze marketingtekst
+ * eromheen (die per seizoen wijzigt), past het toe op priceNow en normaliseert
+ * het label. Geeft de ongewijzigde waarden terug als er geen EXTRA<n>-code in
+ * de tekst staat.
+ */
+function applyExtraCodeDiscount(priceNow, discountLabel) {
+  const match = (discountLabel || "").match(/EXTRA(\d+)/i);
+  if (!match) {
+    return { priceNow, discountLabel };
+  }
+  const percent = parseInt(match[1], 10);
+  const discounted = Math.round(priceNow * (1 - percent / 100) * 100) / 100;
+  return { priceNow: discounted, discountLabel: "korting toegepast op prijs" };
+}
+
 /** Slaat producten en hun prijzen op in de database. */
 async function saveProducts(products) {
   let saved = 0;
@@ -116,12 +137,16 @@ async function saveProducts(products) {
 
     // bax-shop.be toont prijzen incl. BTW, wij slaan excl. BTW op
     const priceOriginalExclVat = Math.round((prod.priceOriginal / VAT_RATE) * 100) / 100;
-    const priceNowExclVat = Math.round((prod.priceNow / VAT_RATE) * 100) / 100;
+    const priceNowExclVatRaw = Math.round((prod.priceNow / VAT_RATE) * 100) / 100;
+    const { priceNow: priceNowExclVat, discountLabel } = applyExtraCodeDiscount(
+      priceNowExclVatRaw,
+      prod.discount || ""
+    );
 
     try {
       await pool.query(
         "INSERT INTO bstock_product_price (bstock_product_id, priceOriginal, priceNow, discount_label) VALUES (?, ?, ?, ?)",
-        [productId, priceOriginalExclVat, priceNowExclVat, prod.discount || ""]
+        [productId, priceOriginalExclVat, priceNowExclVat, discountLabel]
       );
       saved += 1;
     } catch (error) {
