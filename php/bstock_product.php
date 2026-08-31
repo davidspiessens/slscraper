@@ -43,9 +43,26 @@ $historyStmt->execute();
 $history = $historyStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $historyStmt->close();
 
+// Aankopen die aan deze specifieke listing gekoppeld zijn, in de grafiek
+// tonen als duidelijk onderscheiden markering t.o.v. de prijspunten.
+$chartPurchasesStmt = $mysqli->prepare(
+    'SELECT pu.price, pu.invoice_date, s.name AS supplier_name
+     FROM purchase pu
+     JOIN supplier s ON s.id = pu.supplier_id
+     WHERE pu.bstock_product_id = ?
+     ORDER BY pu.invoice_date ASC'
+);
+$chartPurchasesStmt->bind_param('i', $productId);
+$chartPurchasesStmt->execute();
+$chartPurchases = array_map(
+    fn($p) => ['price' => $p['price'], 'invoice_date' => $p['invoice_date'], 'label' => $p['supplier_name']],
+    $chartPurchasesStmt->get_result()->fetch_all(MYSQLI_ASSOC)
+);
+$chartPurchasesStmt->close();
+
 $mysqli->close();
 
-$chart = render_price_chart($history);
+$chart = render_price_chart($history, $chartPurchases);
 $historyDesc = array_reverse($history);
 
 ?>

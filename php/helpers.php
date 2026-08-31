@@ -211,10 +211,17 @@ function render_vat_toggle(): string
     return ob_get_clean();
 }
 
-/** Rendert een SVG line-chart van de prijshistoriek (chronologisch, oud -> nieuw). */
-function render_price_chart(array $history): string
+/**
+ * Rendert een SVG line-chart van de prijshistoriek (chronologisch, oud ->
+ * nieuw). $purchases (optioneel, elk met price/invoice_date/label) wordt als
+ * duidelijk onderscheiden gele diamant tussen de prijspunten getoond — de
+ * x-as is gelijk verdeeld per datapunt (geen echte tijdsas), dus aankopen
+ * worden chronologisch tussen de prijspunten ingevoegd i.p.v. op hun exacte
+ * datum gepositioneerd.
+ */
+function render_price_chart(array $history, array $purchases = []): string
 {
-    if (empty($history)) {
+    if (empty($history) && empty($purchases)) {
         return '<p>Geen prijshistoriek beschikbaar.</p>';
     }
 
@@ -227,7 +234,16 @@ function render_price_chart(array $history): string
     $plotW = $width - $padL - $padR;
     $plotH = $height - $padT - $padB;
 
-    $allPrices = array_map(fn($h) => (float) $h['priceNow'], $history);
+    $events = [];
+    foreach ($history as $h) {
+        $events[] = ['type' => 'price', 'price' => (float) $h['priceNow'], 't' => strtotime($h['created'])];
+    }
+    foreach ($purchases as $p) {
+        $events[] = ['type' => 'purchase', 'price' => (float) $p['price'], 't' => strtotime($p['invoice_date']), 'label' => $p['label'] ?? null];
+    }
+    usort($events, fn($a, $b) => $a['t'] <=> $b['t']);
+
+    $allPrices = array_column($events, 'price');
     $min = min($allPrices);
     $max = max($allPrices);
     if ($min === $max) {
@@ -235,7 +251,7 @@ function render_price_chart(array $history): string
         $max += 1;
     }
 
-    $count = count($history);
+    $count = count($events);
     $stepX = $count > 1 ? $plotW / ($count - 1) : 0;
 
     $toXY = function (float $price, int $index) use ($padL, $padT, $plotW, $plotH, $stepX, $min, $max) {
@@ -244,22 +260,26 @@ function render_price_chart(array $history): string
         return [round($x, 1), round($y, 1)];
     };
 
-    $nowPoints = [];
-    foreach (array_values($history) as $i => $h) {
-        $nowPoints[] = $toXY((float) $h['priceNow'], $i);
-    }
-
     $toStr = fn(array $points): string => implode(' ', array_map(fn($p) => "{$p[0]},{$p[1]}", $points));
 
-    $historyValues = array_values($history);
-
+    $pricePoints = [];
     $circles = '';
-    foreach ($nowPoints as $i => $p) {
-        $tooltip = euro($historyValues[$i]['priceNow']) . ' op ' . date('d/m/Y', strtotime($historyValues[$i]['created']));
-        $circles .= '<circle cx="' . $p[0] . '" cy="' . $p[1] . '" r="3" fill="#0a4d92"><title>' . htmlspecialchars($tooltip) . '</title></circle>';
+    $purchaseMarkers = '';
+    foreach ($events as $i => $e) {
+        [$x, $y] = $toXY($e['price'], $i);
+        if ($e['type'] === 'price') {
+            $pricePoints[] = [$x, $y];
+            $tooltip = euro((string) $e['price']) . ' op ' . date('d/m/Y', $e['t']);
+            $circles .= '<circle cx="' . $x . '" cy="' . $y . '" r="3" fill="#0a4d92"><title>' . htmlspecialchars($tooltip) . '</title></circle>';
+        } else {
+            $tooltip = 'Aankoop: ' . euro((string) $e['price']) . ' op ' . date('d/m/Y', $e['t']) . (!empty($e['label']) ? ' (' . $e['label'] . ')' : '');
+            $size = 6;
+            $pts = "$x," . ($y - $size) . " " . ($x + $size) . ",$y $x," . ($y + $size) . " " . ($x - $size) . ",$y";
+            $purchaseMarkers .= '<polygon points="' . $pts . '" fill="#f1c40f" stroke="#000" stroke-width="1.5"><title>' . htmlspecialchars($tooltip) . '</title></polygon>';
+        }
     }
 
-    // Datumlabels op de x-as (max 6, evenredig verspreid over de datapunten)
+    // Datumlabels op de x-as (max 6, evenredig verspreid over alle punten)
     $labelCount = min(6, $count);
     $labelIndices = [];
     for ($i = 0; $i < $labelCount; $i++) {
@@ -269,31 +289,43 @@ function render_price_chart(array $history): string
 
     $xLabels = '';
     foreach ($labelIndices as $idx) {
-        $x = $nowPoints[$idx][0];
-        $dateStr = date('d/m', strtotime($historyValues[$idx]['created']));
+        [$x, ] = $toXY($events[$idx]['price'], $idx);
+        $dateStr = date('d/m', $events[$idx]['t']);
         $xLabels .= '<text x="' . $x . '" y="' . ($padT + $plotH + 15) . '" text-anchor="middle">' . htmlspecialchars($dateStr) . '</text>';
     }
 
+    $legend = !empty($purchases)
+        ? '<div style="margin-bottom:0.4rem; font-size:0.85rem;"><span style="display:inline-block; width:10px; height:10px; background:#f1c40f; border:1.5px solid #000; transform:rotate(45deg); margin-right:0.4rem; vertical-align:middle;"></span>Aankoop</div>'
+        : '';
+
     ob_start();
     ?>
+    <?= $legend ?>
     <svg viewBox="0 0 <?= $width ?> <?= $height ?>" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto; font-size:11px; font-family:Arial, sans-serif;">
         <line x1="<?= $padL ?>" y1="<?= $padT ?>" x2="<?= $padL ?>" y2="<?= $padT + $plotH ?>" stroke="#ccc" />
         <line x1="<?= $padL ?>" y1="<?= $padT + $plotH ?>" x2="<?= $padL + $plotW ?>" y2="<?= $padT + $plotH ?>" stroke="#ccc" />
         <text x="4" y="<?= $padT + 4 ?>"><?= htmlspecialchars(euro((string) $max)) ?></text>
         <text x="4" y="<?= $padT + $plotH ?>"><?= htmlspecialchars(euro((string) $min)) ?></text>
-        <polyline points="<?= $toStr($nowPoints) ?>" fill="none" stroke="#0a4d92" stroke-width="2" />
+        <polyline points="<?= $toStr($pricePoints) ?>" fill="none" stroke="#0a4d92" stroke-width="2" />
         <?= $circles ?>
+        <?= $purchaseMarkers ?>
         <?= $xLabels ?>
     </svg>
     <?php
     return ob_get_clean();
 }
 
-/** Rendert een SVG line-chart met meerdere prijsreeksen (bv. één per bstock-listing) op een gedeelde tijdsas. */
-function render_multi_price_chart(array $series): string
+/**
+ * Rendert een SVG line-chart met meerdere prijsreeksen (bv. één per
+ * bstock-listing) op een gedeelde tijdsas. $purchases (optioneel, elk met
+ * t/price/label) wordt als duidelijk onderscheiden gele diamant op hun
+ * werkelijke datum getoond, apart van de (kleinere, gekleurde) b-stock
+ * prijspunten.
+ */
+function render_multi_price_chart(array $series, array $purchases = []): string
 {
-    $allPoints = array_merge(...array_column($series, 'points'));
-    if (empty($allPoints)) {
+    $allPoints = !empty($series) ? array_merge(...array_column($series, 'points')) : [];
+    if (empty($allPoints) && empty($purchases)) {
         return '<p>Geen prijshistoriek beschikbaar.</p>';
     }
 
@@ -306,8 +338,8 @@ function render_multi_price_chart(array $series): string
     $plotW = $width - $padL - $padR;
     $plotH = $height - $padT - $padB;
 
-    $times = array_column($allPoints, 't');
-    $prices = array_column($allPoints, 'price');
+    $times = array_merge(array_column($allPoints, 't'), array_column($purchases, 't'));
+    $prices = array_merge(array_column($allPoints, 'price'), array_column($purchases, 'price'));
 
     $minT = min($times);
     $maxT = max($times);
@@ -351,6 +383,23 @@ function render_multi_price_chart(array $series): string
             . htmlspecialchars($s['label']) . '</span>';
     }
 
+    // Aankopen: opvallend andere vorm (gele diamant i.p.v. cirkel) en niet
+    // per-listing gekleurd, zodat ze in één oogopslag te onderscheiden zijn
+    // van de b-stock prijspunten.
+    $purchaseMarkers = '';
+    foreach ($purchases as $p) {
+        [$x, $y] = $toXY($p['t'], $p['price']);
+        $tooltip = 'Aankoop: ' . euro((string) $p['price']) . ' op ' . date('d/m/Y', $p['t']) . (!empty($p['label']) ? ' (' . $p['label'] . ')' : '');
+        $size = 6;
+        $pts = "$x," . ($y - $size) . " " . ($x + $size) . ",$y $x," . ($y + $size) . " " . ($x - $size) . ",$y";
+        $purchaseMarkers .= '<polygon points="' . $pts . '" fill="#f1c40f" stroke="#000" stroke-width="1.5"><title>' . htmlspecialchars($tooltip) . '</title></polygon>';
+    }
+    if (!empty($purchases)) {
+        $legend .= '<span style="display:inline-block; margin-right:1rem;">'
+            . '<span style="display:inline-block; width:10px; height:10px; background:#f1c40f; border:1.5px solid #000; transform:rotate(45deg); margin-right:0.3rem; vertical-align:middle;"></span>'
+            . 'Aankoop</span>';
+    }
+
     // Datumlabels op de x-as (6 evenredig verspreide tijdstippen tussen minT en maxT)
     $tickCount = 6;
     $xLabels = '';
@@ -370,6 +419,7 @@ function render_multi_price_chart(array $series): string
         <text x="4" y="<?= $padT + 4 ?>"><?= htmlspecialchars(euro((string) $maxP)) ?></text>
         <text x="4" y="<?= $padT + $plotH ?>"><?= htmlspecialchars(euro((string) $minP)) ?></text>
         <?= $polylines ?>
+        <?= $purchaseMarkers ?>
         <?= $xLabels ?>
     </svg>
     <?php

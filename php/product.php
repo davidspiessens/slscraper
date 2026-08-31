@@ -95,8 +95,6 @@ if (!empty($listingIds)) {
         $priceSeries[] = ['label' => "#$listingId", 'points' => $points];
     }
 }
-$listingsChart = render_multi_price_chart($priceSeries);
-
 $allPrices = array_column(array_merge(...array_column($priceSeries, 'points')), 'price');
 $minPrice = empty($allPrices) ? null : (string) min($allPrices);
 $maxPrice = empty($allPrices) ? null : (string) max($allPrices);
@@ -129,6 +127,15 @@ $purchases = $purchasesStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $purchasesStmt->close();
 
 $mysqli->close();
+
+// Aankopen op de gedeelde tijdsas van de grafiek tonen, duidelijk
+// onderscheiden van de (per-listing gekleurde) b-stock prijspunten.
+$purchasePoints = array_map(fn($p) => [
+    't' => strtotime($p['invoice_date']),
+    'price' => (float) $p['price'],
+    'label' => $p['supplier_name'],
+], $purchases);
+$listingsChart = render_multi_price_chart($priceSeries, $purchasePoints);
 
 // Merknaam zit niet meer in product.name (zie ignore_product.php-historiek) —
 // hier expliciet samenvoegen voor titel/heading, elders (bv. de productlijst
