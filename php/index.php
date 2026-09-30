@@ -10,7 +10,7 @@ $brandListSql = "
     SELECT b.id, b.name, b.weight, COUNT(p.id) AS product_count
     FROM brand b
     LEFT JOIN bstock_product p ON p.brand_id = b.id AND p.archived = 0 AND p.ignored = 0
-    WHERE b.ignored = 0
+    WHERE b.ignored = 0 AND b.weight < 10000
     GROUP BY b.id, b.name, b.weight
     ORDER BY b.weight ASC, b.name ASC
 ";
