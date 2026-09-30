@@ -48,6 +48,10 @@ $NODE $DIR/coolblue.js && $NODE $DIR/archive_products.js 13
 $NODE $DIR/brands.js
 $NODE $DIR/link_brands.js
 $NODE $DIR/link_products.js
+$NODE $DIR/proapplestar.js && $NODE $DIR/archive_products.js 18
+$NODE $DIR/brands.js
+$NODE $DIR/link_brands.js
+$NODE $DIR/link_products.js
 # $NODE $DIR/thomann.js && $NODE $DIR/archive_products.js 14
 # $NODE $DIR/brands.js
 # $NODE $DIR/link_brands.js
