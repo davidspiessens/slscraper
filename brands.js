@@ -10,13 +10,14 @@
 const pool = require("./db");
 const { log } = require("./logger");
 
-// cuesale-titels hebben geen betrouwbaar merk-scheidingsteken (geen pipes,
-// geen B-stock-voorvoegsel — gewoon "Merk Model" of soms enkel "Model").
-// Eerste-woord-extractie levert er evenveel ruis op (Flightcase, Cable,
-// Generic, Power, ...) als echte merken, dus deze leverancier wordt
-// uitgesloten van nieuwe merk-aanmaak. Bestaande merken linken (link_brands.js)
-// blijft wel gewoon werken voor cuesale-producten.
-const CUESALE_SUPPLIER_ID = 11;
+// cuesale- en cuesaleauctions-titels hebben geen betrouwbaar merk-
+// scheidingsteken (geen pipes, geen B-stock-voorvoegsel — gewoon "Merk Model"
+// of soms enkel "Model", bv. "Audio stageblock Harting", "Flightcase for
+// studio monitor"). Eerste-woord-extractie levert er evenveel ruis op
+// (Flightcase, Cable, Generic, Power, ...) als echte merken, dus deze
+// leveranciers worden uitgesloten van nieuwe merk-aanmaak. Bestaande merken
+// linken (link_brands.js) blijft wel gewoon werken voor hun producten.
+const NO_RELIABLE_BRAND_SUPPLIER_IDS = [11, 19]; // CueSale, CueSale Veilingen
 
 // Strip een optioneel B-stock-voorvoegsel in eender welke vorm:
 // bax-shop: "(B-Stock) ", progear: "B-stock: ". Titels zonder voorvoegsel
@@ -144,10 +145,10 @@ async function run() {
   await log(null, "Start van brands.js", "start");
 
   const [rows] = await pool.query(
-    "SELECT DISTINCT title FROM bstock_product WHERE brand_id IS NULL AND supplier_id != ?",
-    [CUESALE_SUPPLIER_ID]
+    "SELECT DISTINCT title FROM bstock_product WHERE brand_id IS NULL AND supplier_id NOT IN (?)",
+    [NO_RELIABLE_BRAND_SUPPLIER_IDS]
   );
-  console.log(`${rows.length} unieke producttitels gevonden (cuesale uitgesloten).`);
+  console.log(`${rows.length} unieke producttitels gevonden (cuesale/cuesaleauctions uitgesloten).`);
 
   const existing = await getExistingBrandKeys();
   const existingNames = await getExistingBrandNames();

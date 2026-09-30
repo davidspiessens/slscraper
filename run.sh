@@ -52,6 +52,10 @@ $NODE $DIR/proapplestar.js && $NODE $DIR/archive_products.js 18
 $NODE $DIR/brands.js
 $NODE $DIR/link_brands.js
 $NODE $DIR/link_products.js
+$NODE $DIR/cuesaleauctions.js && $NODE $DIR/archive_products.js 19
+$NODE $DIR/brands.js
+$NODE $DIR/link_brands.js
+$NODE $DIR/link_products.js
 # $NODE $DIR/thomann.js && $NODE $DIR/archive_products.js 14
 # $NODE $DIR/brands.js
 # $NODE $DIR/link_brands.js

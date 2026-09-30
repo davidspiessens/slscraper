@@ -56,7 +56,7 @@ $lightestProductsSql = "
     $latestPriceJoin
     $priceRangeJoin
     WHERE p.archived = 0 AND p.ignored = 0 AND b.ignored = 0
-    ORDER BY b.weight ASC
+    ORDER BY b.weight ASC, p.created DESC
     LIMIT 50
 ";
 
