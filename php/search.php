@@ -92,7 +92,7 @@ if ($query !== '') {
         $types = str_repeat('i', count($bstockIds));
 
         $bstockSql = "
-            SELECT bp.id, bp.title, bp.url, bp.created AS product_created, bp.product_id, bp.ignored, bp.archived,
+            SELECT bp.id, bp.title, bp.quantity, bp.url, bp.created AS product_created, bp.product_id, bp.ignored, bp.archived,
                    b.id AS brand_id, b.name AS brand_name, b.weight, b.ignored AS brand_ignored,
                    sup.id AS supplier_id, sup.name AS supplier_name,
                    lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,

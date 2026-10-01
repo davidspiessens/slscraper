@@ -15,6 +15,7 @@
 const { chromium } = require("playwright");
 const pool = require("./db");
 const { log } = require("./logger");
+const { parseQuantity } = require("./quantity");
 
 const startPage = process.argv[2] ? parseInt(process.argv[2], 10) : 1;
 if (!Number.isInteger(startPage) || startPage < 1) {
@@ -104,8 +105,8 @@ async function getOrCreateProductId(prod) {
   }
 
   const [result] = await pool.query(
-    "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, url) VALUES (?, ?, ?, ?)",
-    [SUPPLIER, prod.id, prod.title, prod.url]
+    "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, quantity, url) VALUES (?, ?, ?, ?, ?)",
+    [SUPPLIER, prod.id, prod.title, parseQuantity(prod.title), prod.url]
   );
   return result.insertId;
 }

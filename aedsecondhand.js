@@ -10,6 +10,7 @@
 
 const pool = require("./db");
 const { log } = require("./logger");
+const { parseQuantity } = require("./quantity");
 
 const BASE_URL = "https://secondhand.aedgroup.com";
 const FEED_URL = `${BASE_URL}/shop?pagesize=10000&feed=true&DoNotShowVariantsAsSingleProducts=True`;
@@ -82,8 +83,8 @@ async function getOrCreateProductId(prod) {
   }
 
   const [result] = await pool.query(
-    "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, url) VALUES (?, ?, ?, ?)",
-    [SUPPLIER, prod.id, prod.title, prod.url]
+    "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, quantity, url) VALUES (?, ?, ?, ?, ?)",
+    [SUPPLIER, prod.id, prod.title, parseQuantity(prod.title), prod.url]
   );
   return result.insertId;
 }

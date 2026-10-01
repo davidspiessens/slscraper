@@ -14,7 +14,7 @@ if (!$productId) {
 $mysqli = get_db_connection();
 
 $productStmt = $mysqli->prepare(
-    'SELECT p.id, p.title, p.url, p.created AS product_created, p.product_id, p.ignored,
+    'SELECT p.id, p.title, p.quantity, p.url, p.created AS product_created, p.product_id, p.ignored,
             b.id AS brand_id, b.name AS brand_name, b.weight,
             sup.id AS supplier_id, sup.name AS supplier_name
      FROM bstock_product p
@@ -64,6 +64,7 @@ $mysqli->close();
 
 $chart = render_price_chart($history, $chartPurchases);
 $historyDesc = array_reverse($history);
+$quantity = max(1, (int) $product['quantity']);
 
 ?>
 <!DOCTYPE html>
@@ -121,6 +122,9 @@ $historyDesc = array_reverse($history);
     <h1><?= htmlspecialchars($product['title']) ?></h1>
 
     <p class="meta">
+        Aantal: <?= $quantity ?> stuk<?= $quantity > 1 ? 's (set/pakket)' : '' ?>
+    </p>
+    <p class="meta">
         Merk:
         <?php if ($product['brand_id']): ?>
             <a href="brand.php?id=<?= (int) $product['brand_id'] ?>"><?= htmlspecialchars($product['brand_name']) ?></a>
@@ -164,18 +168,24 @@ $historyDesc = array_reverse($history);
                 <th>Datum</th>
                 <th class="num">Prijs (van)</th>
                 <th class="num">Prijs (nu)</th>
+                <?php if ($quantity > 1): ?>
+                    <th class="num">Prijs per stuk</th>
+                <?php endif; ?>
                 <th class="num">Verschil</th>
                 <th>Korting</th>
             </tr>
         </thead>
         <tbody>
             <?php if (empty($historyDesc)): ?>
-                <tr><td colspan="5">Geen prijshistoriek gevonden.</td></tr>
+                <tr><td colspan="<?= $quantity > 1 ? 6 : 5 ?>">Geen prijshistoriek gevonden.</td></tr>
             <?php else: foreach ($historyDesc as $row): ?>
                 <tr>
                     <td><?= htmlspecialchars($row['created']) ?></td>
                     <td class="num"><?= euro($row['priceOriginal']) ?></td>
                     <td class="num"><?= euro($row['priceNow']) ?></td>
+                    <?php if ($quantity > 1): ?>
+                        <td class="num"><?= euro((string) ((float) $row['priceNow'] / $quantity)) ?></td>
+                    <?php endif; ?>
                     <td class="num"><?= euro((string) ($row['priceOriginal'] - $row['priceNow'])) ?></td>
                     <td><?= htmlspecialchars($row['discount_label'] ?? '') ?></td>
                 </tr>

@@ -9,15 +9,12 @@
 
 const pool = require("./db");
 const { log } = require("./logger");
+const { stripQuantityPrefix } = require("./quantity");
 
 // Strip een optioneel B-stock-voorvoegsel in eender welke vorm:
 // bax-shop: "(B-Stock) ", progear: "B-stock: ". Titels zonder voorvoegsel
 // (bv. sommige progear-artikels) blijven ongewijzigd.
 const BSTOCK_PREFIX_REGEX = /^\(?b-stock\)?:?\s*/i;
-// Zie brands.js: kinxsound zet vaak een aantal vooraan de titel ("8X MARTIN
-// AUDIO...", "11+1 VARI*LITE...") — zonder dit te strippen matcht dat aantal
-// zelf op een (nep-)merk i.p.v. het echte merk verderop in de titel.
-const QUANTITY_PREFIX_REGEX = /^\d+(?:\+\d+)?x?\s+/i;
 // Zie brands.js: sommige titels laten het eerste woord op een leesteken
 // eindigen (bv. kinxsound "AD-SYSTEMS: ...", "DYNACORD: ..."), dat hoort niet
 // bij de merknaam.
@@ -41,6 +38,10 @@ const BRAND_ALIASES = {
   // thomann-titels gebruiken "Martin Guitar" (enkelvoud), het bestaande merk
   // (van een andere leverancier) heet "Martin Guitars" (meervoud).
   "martin guitar": "martin guitars",
+  // sommige titels schrijven "LabGruppen" aan elkaar (één woord), het
+  // bestaande merk heet "Lab Gruppen" (twee woorden) — zonder deze alias
+  // ontstaat opnieuw een duplicaat-merk (gebeurd, zie merk-opruiming).
+  labgruppen: "lab gruppen",
 };
 
 // Zie brands.js: "Martin" op zich matcht het bestaande merk "Martin
@@ -59,7 +60,7 @@ function extractFirstWord(title) {
     return null;
   }
 
-  const withoutPrefix = title.replace(BSTOCK_PREFIX_REGEX, "").replace(QUANTITY_PREFIX_REGEX, "");
+  const withoutPrefix = stripQuantityPrefix(title.replace(BSTOCK_PREFIX_REGEX, ""));
 
   const lower = withoutPrefix.toLowerCase();
   const multiWordMatch = MULTI_WORD_BRAND_PREFIXES.find(

@@ -9,6 +9,7 @@
  */
 
 const pool = require("./db");
+const { stripQuantityPrefix } = require("./quantity");
 
 // Voorvoegsel: bax "(B-Stock) ", progear "B-stock: ". Titels zonder
 // voorvoegsel (xlrpro, aedsecondhand, soundsale) blijven ongewijzigd.
@@ -41,7 +42,7 @@ function stripBrandPrefix(title, brandPrefixes) {
 function cleanName(title, brandPrefixes) {
   const pipeMatch = title.match(PIPE_TITLE_REGEX);
   if (pipeMatch) {
-    return pipeMatch[1]
+    return stripQuantityPrefix(pipeMatch[1])
       .replace(PAREN_REGEX, "")
       .replace(DASH_SUFFIX_REGEX, "")
       .replace(SECOND_HAND_SUFFIX_REGEX, "")
@@ -51,7 +52,10 @@ function cleanName(title, brandPrefixes) {
 
   // B-stock-voorvoegsel eerst weg (bax "(B-Stock) Fazley ...") — anders
   // begint de titel niet letterlijk met de merknaam en mist de brand-strip.
-  const withoutBstockPrefix = title.replace(BSTOCK_PREFIX_REGEX, "");
+  // Zie link_products.js: een aantal-voorvoegsel ("4x ...") moet er ook
+  // eerst af, anders komt het in product.name terecht i.p.v. apart
+  // bijgehouden te worden in bstock_product.quantity.
+  const withoutBstockPrefix = stripQuantityPrefix(title.replace(BSTOCK_PREFIX_REGEX, ""));
   const working = stripBrandPrefix(withoutBstockPrefix, brandPrefixes);
 
   return working

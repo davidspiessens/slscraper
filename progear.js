@@ -1,6 +1,7 @@
 const { chromium } = require("playwright");
 const pool = require("./db");
 const { log } = require("./logger");
+const { parseQuantity } = require("./quantity");
 
 const BASE_URL = "https://www.progear.be";
 const SEARCH_URL = `${BASE_URL}/nl/b-stock?size=1000`;
@@ -75,8 +76,8 @@ async function getOrCreateProductId(prod) {
   }
 
   const [result] = await pool.query(
-    "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, url) VALUES (?, ?, ?, ?)",
-    [SUPPLIER, prod.id, prod.title, prod.url]
+    "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, quantity, url) VALUES (?, ?, ?, ?, ?)",
+    [SUPPLIER, prod.id, prod.title, parseQuantity(prod.title), prod.url]
   );
   return result.insertId;
 }

@@ -29,7 +29,7 @@ if (!$supplier) {
 // ook genegeerde producten (in tegenstelling tot brand.php) — render_product_row
 // markeert die dan wel visueel (rode achtergrond) via p.ignored hieronder.
 $productsSql = "
-    SELECT p.id, p.title, p.url, p.created AS product_created, p.product_id, p.archived, p.ignored,
+    SELECT p.id, p.title, p.quantity, p.url, p.created AS product_created, p.product_id, p.archived, p.ignored,
            b.id AS brand_id, b.name AS brand_name, b.weight, b.ignored AS brand_ignored,
            sup.id AS supplier_id, sup.name AS supplier_name,
            lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,

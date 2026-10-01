@@ -38,6 +38,11 @@ const VAT_COOKIE = 'vat_mode';
 // achtervoegsel, tekst tussen haakjes en tekst na een liggend streepje
 // omringd door spaties. Andere leveranciers hebben geen markering.
 const BSTOCK_PREFIX_REGEX = '/^\(?b-stock\)?:?\s*/i';
+// Aantal-voorvoegsel ("4x ...", "11+1 ..."), zie quantity.js. Moet gestript
+// worden vóór de merk-prefix-match, anders linkt "4x QSC WL 3082" nooit aan
+// hetzelfde product als "QSC WL 3082" — het aantal wordt apart bijgehouden
+// in bstock_product.quantity.
+const QUANTITY_PREFIX_REGEX = '/^(\d+)(?:\+\d+)?x?\s+/i';
 const SECOND_HAND_SUFFIX_REGEX = '/\s*-?\s*\[second-hand\]\s*$/i';
 const PAREN_REGEX = '/\s*\([^)]*\)/';
 const DASH_SUFFIX_REGEX = '/\s+[-–—]\s+.*$/u';
@@ -59,12 +64,12 @@ const PIPE_TITLE_REGEX = '/^(?:used|b-stock)\s*\|\s*[^|]+?\s*\|\s*(.+)$/i';
 function clean_product_name(string $title, array $brandPrefixes = []): string
 {
     if (preg_match(PIPE_TITLE_REGEX, $title, $pipeMatch)) {
-        return trim(preg_replace('/\s+/', ' ', $pipeMatch[1]));
+        return trim(preg_replace('/\s+/', ' ', preg_replace(QUANTITY_PREFIX_REGEX, '', $pipeMatch[1])));
     }
 
     // B-stock-voorvoegsel eerst weg (bax "(B-Stock) Fazley ...") — anders
     // begint de titel niet letterlijk met de merknaam en mist de brand-strip.
-    $title = preg_replace(BSTOCK_PREFIX_REGEX, '', $title);
+    $title = preg_replace(QUANTITY_PREFIX_REGEX, '', preg_replace(BSTOCK_PREFIX_REGEX, '', $title));
 
     foreach ($brandPrefixes as $prefix) {
         if ($prefix === null || $prefix === '') {
@@ -468,10 +473,14 @@ function render_product_row(array $row, bool $showGenerateAction = false, ?strin
         $rowStyle = '';
     }
     $urlHost = preg_replace('/^www\./', '', (string) parse_url($row['url'], PHP_URL_HOST));
+    $quantity = max(1, (int) ($row['quantity'] ?? 1));
     ?>
     <tr<?= $rowStyle ?>>
         <td>
             <a href="bstock_product.php?id=<?= (int) $row['id'] ?>"><?= htmlspecialchars($row['title']) ?></a>
+            <?php if ($quantity > 1): ?>
+                <span title="Set/pakket van <?= $quantity ?> stuks" style="background:#eef; border-radius:3px; padding:0 0.3rem; font-size:0.85em;">&times;<?= $quantity ?></span>
+            <?php endif; ?>
             <?php if (!empty($row['product_id'])): ?>
                 &nbsp;<a href="product.php?id=<?= (int) $row['product_id'] ?>" title="Bekijk productoverzicht">&#128230;</a>
             <?php endif; ?>
@@ -495,7 +504,12 @@ function render_product_row(array $row, bool $showGenerateAction = false, ?strin
         <?php $isLowest = $row['lowest_price'] !== null && (float) $row['priceNow'] === (float) $row['lowest_price']; ?>
         <td class="num"><?= $row['weight'] === null ? '-' : htmlspecialchars((string) $row['weight']) ?></td>
         <td class="num"><?= euro($row['priceOriginal']) ?></td>
-        <td class="num"<?= $isLowest ? ' style="background-color: #d4f7d4;"' : '' ?>><?= euro($row['priceNow']) ?></td>
+        <td class="num"<?= $isLowest ? ' style="background-color: #d4f7d4;"' : '' ?>>
+            <?= euro($row['priceNow']) ?>
+            <?php if ($quantity > 1 && $row['priceNow'] !== null): ?>
+                <br><small>(<?= euro((string) ((float) $row['priceNow'] / $quantity)) ?>/stuk)</small>
+            <?php endif; ?>
+        </td>
         <td class="num"><?= euro($row['price_diff']) ?></td>
         <td class="num"><?= euro($row['highest_price']) ?></td>
         <td class="num"><?= euro($row['lowest_price']) ?></td>

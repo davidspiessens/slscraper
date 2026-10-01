@@ -28,6 +28,7 @@
 const { chromium } = require("playwright");
 const pool = require("./db");
 const { log } = require("./logger");
+const { parseQuantity } = require("./quantity");
 
 const BASE_URL = "https://auctions.cuesale.com";
 const SUPPLIER = 19; // CueSale Veilingen
@@ -42,6 +43,35 @@ function parsePrice(text) {
   if (!match) return null;
   const value = parseFloat(match[1].replace(/\./g, ""));
   return isNaN(value) ? null : value;
+}
+
+/**
+ * Geeft true als de veiling al gesloten is (einddatum in het verleden). Dit
+ * staat statisch (server-rendered) op de dashboardpagina, dus geen extra
+ * request nodig. Een gesloten veiling se biedingen veranderen nooit meer —
+ * lots die al een prijs hebben, hoeven dan niet opnieuw bezocht te worden
+ * (zie alreadyScraped hieronder).
+ */
+async function isAuctionClosed(page) {
+  const text = await page.evaluate(() => {
+    const el = Array.from(document.querySelectorAll("*")).find(
+      (e) => e.children.length === 0 && /^end$/i.test(e.textContent.trim())
+    );
+    const sibling = el?.parentElement?.querySelector("span:last-child");
+    return sibling ? sibling.textContent.trim() : null;
+  });
+  if (!text) return false;
+  const endDate = new Date(text.replace(/\s+/g, " "));
+  if (isNaN(endDate.getTime())) return false;
+  return endDate.getTime() < Date.now();
+}
+
+/** true als dit lot al een prijs heeft — dan niet opnieuw bezoeken als de veiling gesloten is. */
+async function alreadyScraped(productId) {
+  const [rows] = await pool.query("SELECT id FROM bstock_product_price WHERE bstock_product_id = ? LIMIT 1", [
+    productId,
+  ]);
+  return rows.length > 0;
 }
 
 /** Haalt alle veiling-dashboardlinks op van de homepage. */
@@ -136,8 +166,8 @@ async function getOrCreateProductId(lot) {
   }
 
   const [result] = await pool.query(
-    "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, url) VALUES (?, ?, ?, ?)",
-    [SUPPLIER, lot.id, lot.title, lot.url]
+    "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, quantity, url) VALUES (?, ?, ?, ?, ?)",
+    [SUPPLIER, lot.id, lot.title, parseQuantity(lot.title), lot.url]
   );
   return result.insertId;
 }
@@ -186,6 +216,9 @@ async function scrape() {
       continue;
     }
 
+    const closed = await isAuctionClosed(page);
+    console.log(`  Status: ${closed ? "gesloten (biedingen definitief)" : "nog actief"}`);
+
     await loadAllLots(page);
     const lots = await getLotStubsOnPage(page);
     totalFound += lots.length;
@@ -194,9 +227,23 @@ async function scrape() {
     let saved = 0;
     let skipped = 0;
     let timedOut = 0;
+    let alreadyDone = 0;
 
     for (let j = 0; j < lots.length; j++) {
       const lot = lots[j];
+
+      // Een gesloten veiling verandert nooit meer — een lot dat al een prijs
+      // heeft, hoeft dan niet opnieuw bezocht te worden (scheelt een request
+      // én voorkomt dat elke cron-run dezelfde bieding als nieuwe rij
+      // bijschrijft).
+      if (closed) {
+        const productId = await getOrCreateProductId(lot);
+        if (await alreadyScraped(productId)) {
+          alreadyDone += 1;
+          continue;
+        }
+      }
+
       const { bidText, timedOut: didTimeOut } = await getBidForLot(page, lot);
 
       if (didTimeOut) {
@@ -212,10 +259,12 @@ async function scrape() {
       }
 
       if ((j + 1) % 50 === 0 || j === lots.length - 1) {
-        console.log(`    ${j + 1}/${lots.length} lots verwerkt (${saved} opgeslagen, ${skipped} zonder bod, ${timedOut} timeout)`);
+        console.log(
+          `    ${j + 1}/${lots.length} lots verwerkt (${saved} opgeslagen, ${alreadyDone} al gedaan, ${skipped} zonder bod, ${timedOut} timeout)`
+        );
         await log(
           SUPPLIER,
-          `${auctionUrl}: ${j + 1}/${lots.length} lots verwerkt (${saved} opgeslagen, ${skipped} zonder bod, ${timedOut} timeout)`
+          `${auctionUrl}: ${j + 1}/${lots.length} lots verwerkt (${saved} opgeslagen, ${alreadyDone} al gedaan, ${skipped} zonder bod, ${timedOut} timeout)`
         );
       }
 
@@ -227,8 +276,13 @@ async function scrape() {
 
     totalSaved += saved;
     totalTimedOut += timedOut;
-    console.log(`  ✓ Veiling klaar: ${saved} opgeslagen, ${skipped} zonder bod, ${timedOut} timeout (totaal opgeslagen: ${totalSaved})`);
-    await log(SUPPLIER, `${auctionUrl}: klaar — ${saved} opgeslagen, ${skipped} zonder bod, ${timedOut} timeout`);
+    console.log(
+      `  ✓ Veiling klaar: ${saved} opgeslagen, ${alreadyDone} al gedaan, ${skipped} zonder bod, ${timedOut} timeout (totaal opgeslagen: ${totalSaved})`
+    );
+    await log(
+      SUPPLIER,
+      `${auctionUrl}: klaar — ${saved} opgeslagen, ${alreadyDone} al gedaan, ${skipped} zonder bod, ${timedOut} timeout`
+    );
 
     if (i < auctionUrls.length - 1) {
       console.log("  ⏳ 30s wachten voor volgende veiling...");

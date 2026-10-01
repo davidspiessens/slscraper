@@ -31,7 +31,7 @@ if (!$product) {
 }
 
 $listingsSql = "
-    SELECT bp.id, bp.title, bp.url, bp.created AS product_created, bp.product_id, bp.ignored, bp.archived,
+    SELECT bp.id, bp.title, bp.quantity, bp.url, bp.created AS product_created, bp.product_id, bp.ignored, bp.archived,
            b.id AS brand_id, b.name AS brand_name, b.weight, b.ignored AS brand_ignored,
            sup.id AS supplier_id, sup.name AS supplier_name,
            lp.priceOriginal, lp.priceNow, lp.discount_label, lp.created AS price_created,
@@ -83,16 +83,27 @@ if (!empty($listingIds)) {
     $priceHistoryRows = $historyStmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $historyStmt->close();
 
+    // Een lot van bv. 4 stuks toont een veelvoud van de prijs van een los
+    // stuk — zonder normalisatie zou zo'n listing de laagste/hoogste prijs
+    // en de grafiek van dit (per-stuk) canonieke product volledig
+    // vertekenen. Elke listing wordt dus herleid tot prijs-per-stuk vóór
+    // vergelijking; de rij-weergave (render_product_row) toont daarnaast nog
+    // gewoon de werkelijke, ongedeelde lotprijs.
+    $quantityByListingId = array_column($listings, 'quantity', 'id');
+
     $pointsByListing = [];
     foreach ($priceHistoryRows as $row) {
+        $quantity = max(1, (int) ($quantityByListingId[$row['bstock_product_id']] ?? 1));
         $pointsByListing[$row['bstock_product_id']][] = [
             't' => strtotime($row['created']),
-            'price' => (float) $row['priceNow'],
+            'price' => (float) $row['priceNow'] / $quantity,
         ];
     }
 
     foreach ($pointsByListing as $listingId => $points) {
-        $priceSeries[] = ['label' => "#$listingId", 'points' => $points];
+        $quantity = max(1, (int) ($quantityByListingId[$listingId] ?? 1));
+        $label = $quantity > 1 ? "#$listingId (×$quantity, per stuk)" : "#$listingId";
+        $priceSeries[] = ['label' => $label, 'points' => $points];
     }
 }
 $allPrices = array_column(array_merge(...array_column($priceSeries, 'points')), 'price');
@@ -214,7 +225,7 @@ $productFullName = trim(($product['brand_name'] ?? '') . ' ' . $product['name'])
             </form>
         <?php endif; ?>
     </p>
-    <p class="meta">Laagste prijs: <?= euro($minPrice) ?> &nbsp;|&nbsp; Hoogste prijs: <?= euro($maxPrice) ?></p>
+    <p class="meta">Laagste prijs (per stuk): <?= euro($minPrice) ?> &nbsp;|&nbsp; Hoogste prijs (per stuk): <?= euro($maxPrice) ?></p>
     <p class="meta"><a href="add_purchase.php?product_id=<?= (int) $product['id'] ?>">Aankoop registreren &rarr;</a></p>
 
     <h2>Leveranciers</h2>

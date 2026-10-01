@@ -1,10 +1,26 @@
 /**
- * Scrapet tweedehands producten van cuesale.com/shop/ en slaat ze op in de
- * database. Standaard WooCommerce-paginering. Prijzen staan al excl. BTW op
- * de site ("excl. vat"), dus geen omrekening nodig.
+ * Scrapet tweedehands producten van 10kused.com/product-listings/ en slaat
+ * ze op in de database. Standaard WooCommerce-paginering. Prijzen staan al
+ * excl. BTW op de site ("All prices shown on this website are exclusive of
+ * VAT"), dus geen omrekening nodig.
+ *
+ * Grote catalogus (~4978 producten, 18 per pagina, ~277 pagina's) — met de
+ * gebruikelijke 30s tussen pagina's duurt een volledige scrape dus bijna
+ * 2,5 uur, maar dat is de uitdrukkelijke keuze hier (consistent met de
+ * andere leveranciers in dit project).
+ *
+ * Opgelet: de prijs die hier getoond wordt is niet altijd de werkelijke
+ * transactieprijs van de volledige listing — sommige producten worden per
+ * paar/pakket verkocht waarbij deze pagina soms de prijs "per stuk" toont
+ * en soms de totale pakketprijs (zie bv. product-detailpagina's: "SOLD AS:
+ * Pairs" vs "SOLD AS: Full Package"). Dat onderscheid is enkel op de
+ * individuele productpagina te zien, niet op deze overzichtspagina — net als
+ * bij alle andere leveranciers in dit project wordt enkel een leidend
+ * aantal-voorvoegsel in de titel ("4x ...") als quantity herkend; impliciete
+ * pakketten zonder zo'n voorvoegsel in de titel blijven quantity 1.
  *
  * Uitvoeren:
- *     node cuesale.js [startpagina]
+ *     node 10kused.js [startpagina]
  */
 
 const { chromium } = require("playwright");
@@ -14,29 +30,30 @@ const { parseQuantity } = require("./quantity");
 
 const startPage = process.argv[2] ? parseInt(process.argv[2], 10) : 1;
 if (!Number.isInteger(startPage) || startPage < 1) {
-  console.error("Gebruik: node cuesale.js [startpagina]");
+  console.error("Gebruik: node 10kused.js [startpagina]");
   console.error("Startpagina moet een geheel getal groter dan of gelijk aan 1 zijn.");
   process.exit(1);
 }
 
-const BASE_URL = "https://cuesale.com";
-const QUERY = "per_page=36";
+const BASE_URL = "https://www.10kused.com";
 const START_URL =
-  startPage > 1 ? `${BASE_URL}/shop/page/${startPage}/?${QUERY}` : `${BASE_URL}/shop/?${QUERY}`;
-const SUPPLIER = 11; // CueSale
+  startPage > 1 ? `${BASE_URL}/product-listings/page/${startPage}/` : `${BASE_URL}/product-listings/`;
+const SUPPLIER = 21; // 10Kused
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const PRODUCT_CARD_SELECTOR = ".wd-product[data-id]";
+const PRODUCT_CARD_SELECTOR = ".product.type-product";
 
 /** Haal alle productkaarten op de huidige pagina op. */
 async function getProductsOnPage(page) {
   return page.evaluate((cardSelector) => {
-    // Zet een Euro-geformatteerd prijsgetal ("7.775,00") om naar een float.
+    // "€4,656" -> 4656 (komma = duizendtal, Engelstalige site, net als een
+    // eventueel decimaal punt i.p.v. de Europese komma-als-decimaal-stijl).
     function parsePrice(text) {
       if (!text) return null;
-      const normalized = text.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
-      const value = parseFloat(normalized);
+      const match = text.match(/€\s*([\d,]+(?:\.\d+)?)/);
+      if (!match) return null;
+      const value = parseFloat(match[1].replace(/,/g, ""));
       return isNaN(value) ? null : value;
     }
 
@@ -44,38 +61,20 @@ async function getProductsOnPage(page) {
     const cards = document.querySelectorAll(cardSelector);
 
     cards.forEach((card) => {
-      const id = card.getAttribute("data-id");
+      const idMatch = card.className.match(/post-(\d+)/);
+      const id = idMatch ? idMatch[1] : null;
 
-      // --- Titel en URL ---
-      const linkEl = card.querySelector("h3.wd-entities-title a");
-      const title = linkEl ? linkEl.innerText.trim() : null;
+      const titleEl = card.querySelector(".woocommerce-loop-product__title");
+      const title = titleEl ? titleEl.textContent.trim() : null;
+
+      const linkEl = card.querySelector("a.woocommerce-loop-product__link");
       const url = linkEl ? linkEl.href : null;
 
-      // --- Prijzen: variabele producten tonen een prijsklasse ("€X – €Y",
-      // vanaf-prijs voor meerdere varianten), geen korting — cuesale heeft
-      // nergens een echte van/nu-kortingsprijs. Bij 2+ bedragen nemen we dus
-      // de laagste ("vanaf"-prijs) als enige prijs, anders het ene bedrag.
-      const priceEls = card.querySelectorAll(".price .amount");
-      let priceOriginal = null;
-      let priceNow = null;
-      if (priceEls.length >= 2) {
-        const values = Array.from(priceEls)
-          .map((el) => parsePrice(el.innerText))
-          .filter((v) => v != null);
-        const minPrice = values.length ? Math.min(...values) : null;
-        priceOriginal = minPrice;
-        priceNow = minPrice;
-      } else if (priceEls.length === 1) {
-        priceNow = parsePrice(priceEls[0].innerText);
-        priceOriginal = priceNow;
-      }
+      const priceText = card.querySelector(".price")?.textContent.trim() || "";
+      const price = parsePrice(priceText);
 
-      // --- Kortingsbadge (indien aanwezig) ---
-      const discountEl = card.querySelector(".onsale");
-      const discount = discountEl ? discountEl.innerText.trim() || null : null;
-
-      if (id && title && url) {
-        results.push({ id, title, priceOriginal, priceNow, discount, url });
+      if (id && title && url && price != null) {
+        results.push({ id, title, priceOriginal: price, priceNow: price, discount: null, url });
       }
     });
 
@@ -138,7 +137,7 @@ async function saveProducts(products) {
 /** Geeft de URL van de volgende pagina, of null als er geen is. */
 async function getNextPageUrl(page) {
   const nextHref = await page.evaluate(() => {
-    const btn = document.querySelector("a.next.page-numbers");
+    const btn = document.querySelector("a.next.page-numbers, a.next");
     return btn ? btn.getAttribute("href") : null;
   });
 
@@ -155,11 +154,11 @@ async function scrape() {
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
       "AppleWebKit/537.36 (KHTML, like Gecko) " +
       "Chrome/124.0.0.0 Safari/537.36",
-    locale: "nl-BE",
+    locale: "en-GB",
   });
   const page = await context.newPage();
 
-  await log(SUPPLIER, "Start van cuesale.js", "start");
+  await log(SUPPLIER, "Start van 10kused.js", "start");
 
   let currentUrl = START_URL;
   let pageNum = startPage;
@@ -169,7 +168,7 @@ async function scrape() {
 
   while (currentUrl) {
     console.log(`Pagina ${pageNum}: ${currentUrl}`);
-    await page.goto(currentUrl, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(currentUrl, { waitUntil: "load", timeout: 30000 });
 
     try {
       await page.waitForSelector(PRODUCT_CARD_SELECTOR, { timeout: 15000 });
@@ -210,13 +209,13 @@ async function scrape() {
   await browser.close();
 
   console.log(`\n✓ ${totalSaved} product(en) opgeslagen in de database (${totalFound} gevonden)`);
-  await log(SUPPLIER, `Einde van cuesale.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`, "success");
+  await log(SUPPLIER, `Einde van 10kused.js: ${totalSaved} opgeslagen (${totalFound} gevonden)`, "success");
 
   await pool.end();
 }
 
 scrape().catch(async (err) => {
   console.error(err);
-  await log(SUPPLIER, `Fout in cuesale.js: ${err.message}`, "error");
+  await log(SUPPLIER, `Fout in 10kused.js: ${err.message}`, "error");
   process.exit(1);
 });
