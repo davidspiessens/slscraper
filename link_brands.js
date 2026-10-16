@@ -10,6 +10,7 @@
 const pool = require("./db");
 const { log } = require("./logger");
 const { stripQuantityPrefix } = require("./quantity");
+const { loadAliases, matchAliasExact, matchAliasPrefix } = require("./brandAlias");
 
 // Strip een optioneel B-stock-voorvoegsel in eender welke vorm:
 // bax-shop: "(B-Stock) ", progear: "B-stock: ". Titels zonder voorvoegsel
@@ -30,48 +31,31 @@ const PIPE_BRAND_REGEX = /^(?:used|b-stock)\s*\|\s*([^|]+?)\s*\|/i;
 // zelf als merk te nemen.
 const PIPE_NO_BRAND_REGEX = /^(?:used|b-stock)\s*\|/i;
 
-// Zie brands.js: sub-merken/productlijnen die feitelijk hetzelfde bedrijf zijn
-// als een bestaand merk (bv. "GrandMA" -> "MA Lighting") moeten aan dat
-// bestaande merk gekoppeld worden i.p.v. te matchen op hun eigen eerste woord.
-const BRAND_ALIASES = {
-  grandma: "ma lighting",
-  // thomann-titels gebruiken "Martin Guitar" (enkelvoud), het bestaande merk
-  // (van een andere leverancier) heet "Martin Guitars" (meervoud).
-  "martin guitar": "martin guitars",
-  // sommige titels schrijven "LabGruppen" aan elkaar (één woord), het
-  // bestaande merk heet "Lab Gruppen" (twee woorden) — zonder deze alias
-  // ontstaat opnieuw een duplicaat-merk (gebeurd, zie merk-opruiming).
-  labgruppen: "lab gruppen",
-};
+// Alternatieve schrijfwijzen en meerwoord-voorvoegsels ("GrandMA" -> MA Lighting,
+// "Martin Audio" i.p.v. Martin Professional, "L’Acoustics" -> L-Acoustics, ...)
+// staan in de tabel brand_alias, zie brandAlias.js.
 
-// Zie brands.js: "Martin" op zich matcht het bestaande merk "Martin
-// Professional" (first_word "Martin"), terwijl titels als "Martin Audio ..."
-// (kinxsound) of "Martin Guitar ..." (thomann) een ander, al bestaand merk
-// bedoelen. Zelfde verhaal voor "Adam" (Adam Audio) vs "Adam Hall" (cases/
-// hardware, compleet andere firma).
-const MULTI_WORD_BRAND_PREFIXES = ["martin audio", "martin guitar", "adam hall"];
-
-function extractFirstWord(title) {
+/** Geeft { aliasBrandId, word }: een alias-treffer (brand-id) of het eerste woord / pipe-merk. */
+function extractFirstWord(title, aliases) {
   const pipeMatch = title.match(PIPE_BRAND_REGEX);
   if (pipeMatch) {
-    return pipeMatch[1].trim();
+    const word = pipeMatch[1].trim();
+    return { aliasBrandId: matchAliasExact(word, aliases), word };
   }
   if (PIPE_NO_BRAND_REGEX.test(title)) {
-    return null;
+    return { aliasBrandId: null, word: null };
   }
 
   const withoutPrefix = stripQuantityPrefix(title.replace(BSTOCK_PREFIX_REGEX, ""));
 
-  const lower = withoutPrefix.toLowerCase();
-  const multiWordMatch = MULTI_WORD_BRAND_PREFIXES.find(
-    (prefix) => lower === prefix || lower.startsWith(`${prefix} `)
-  );
-  if (multiWordMatch) {
-    return withoutPrefix.slice(0, multiWordMatch.length);
+  const prefixHit = matchAliasPrefix(withoutPrefix, aliases);
+  if (prefixHit) {
+    return { aliasBrandId: prefixHit, word: null };
   }
 
   const match = withoutPrefix.match(FIRST_WORD_REGEX);
-  return match ? match[1].replace(TRAILING_PUNCTUATION_REGEX, "") : null;
+  const word = match ? match[1].replace(TRAILING_PUNCTUATION_REGEX, "") : null;
+  return { aliasBrandId: word ? matchAliasExact(word, aliases) : null, word };
 }
 
 async function run() {
@@ -79,6 +63,7 @@ async function run() {
 
   const [brandRows] = await pool.query("SELECT id, name, first_word FROM brand ORDER BY id ASC");
   const [products] = await pool.query("SELECT id, title FROM bstock_product WHERE brand_id IS NULL");
+  const aliases = await loadAliases(pool);
 
   // Meerdere merken kunnen per ongeluk hetzelfde first_word hebben (bv. na een
   // handmatige rename van brand.name). Gebruik dan enkel het oudste merk-id,
@@ -107,8 +92,17 @@ async function run() {
   // Groepeer producten per (lowercase) eerste woord/merknaam na een eventueel
   // B-stock-voorvoegsel
   const productIdsByWord = new Map();
+  // Producten waarvan een alias het merk al ondubbelzinnig vastlegt.
+  const productIdsByAliasBrand = new Map();
   for (const product of products) {
-    const word = extractFirstWord(product.title);
+    const { aliasBrandId, word } = extractFirstWord(product.title, aliases);
+    if (aliasBrandId) {
+      if (!productIdsByAliasBrand.has(aliasBrandId)) {
+        productIdsByAliasBrand.set(aliasBrandId, []);
+      }
+      productIdsByAliasBrand.get(aliasBrandId).push(product.id);
+      continue;
+    }
     if (!word) continue;
     const key = word.toLowerCase();
     if (!productIdsByWord.has(key)) {
@@ -121,11 +115,11 @@ async function run() {
   // voorvoegsel zijn van een reeds bestaand, langer merk (bv. kandidaat
   // "Austrian" terwijl het merk inmiddels "Austrian Audio" heet). Zonder deze
   // fallback blijft zo'n product simpelweg ongekoppeld liggen.
-  function findBrandByPrefix(resolvedKey) {
+  function findBrandByPrefix(key) {
     const matches = brands.filter(
       (brand) =>
-        brand.first_word.toLowerCase().startsWith(`${resolvedKey} `) ||
-        brand.name.toLowerCase().startsWith(`${resolvedKey} `)
+        brand.first_word.toLowerCase().startsWith(`${key} `) ||
+        brand.name.toLowerCase().startsWith(`${key} `)
     );
     // Bij meerdere mogelijke matches is het te onzeker om er automatisch één
     // te kiezen — dan liever ongekoppeld laten dan fout koppelen.
@@ -134,9 +128,18 @@ async function run() {
 
   let totalLinked = 0;
 
+  const brandNameById = new Map(brandRows.map((b) => [b.id, b.name]));
+  for (const [brandId, productIds] of productIdsByAliasBrand) {
+    const [result] = await pool.query(
+      "UPDATE bstock_product SET brand_id = ? WHERE id IN (?)",
+      [brandId, productIds]
+    );
+    totalLinked += result.affectedRows;
+    console.log(`  → "${brandNameById.get(brandId)}" (alias): ${result.affectedRows} product(en) gekoppeld.`);
+  }
+
   for (const [key, productIds] of productIdsByWord) {
-    const resolvedKey = BRAND_ALIASES[key] || key;
-    const brand = brandsByWord.get(resolvedKey) || brandsByName.get(resolvedKey) || findBrandByPrefix(resolvedKey);
+    const brand = brandsByWord.get(key) || brandsByName.get(key) || findBrandByPrefix(key);
     if (!brand || productIds.length === 0) continue;
 
     const [result] = await pool.query(

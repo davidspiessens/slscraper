@@ -31,7 +31,7 @@ if ($query !== '') {
     )->fetch_all(MYSQLI_ASSOC);
 
     $matchRow = function (string $text) use ($query): ?string {
-        if (mb_stripos($text, $query) !== false) {
+        if (mb_stripos($text, $query) !== false || search_text_contains($query, $text)) {
             return 'exact';
         }
         if (fuzzy_matches($query, $text)) {

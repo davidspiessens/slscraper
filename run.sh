@@ -17,10 +17,10 @@ $NODE $DIR/aedsecondhand.js && $NODE $DIR/archive_products.js 5
 $NODE $DIR/brands.js
 $NODE $DIR/link_brands.js
 $NODE $DIR/link_products.js
-$NODE $DIR/xlrpro.js && $NODE $DIR/archive_soldout_xlrpro.js 4
-$NODE $DIR/brands.js
-$NODE $DIR/link_brands.js
-$NODE $DIR/link_products.js
+# $NODE $DIR/xlrpro.js && $NODE $DIR/archive_soldout_xlrpro.js 4
+# $NODE $DIR/brands.js
+# $NODE $DIR/link_brands.js
+# $NODE $DIR/link_products.js
 $NODE $DIR/soundsale.js && $NODE $DIR/archive_products.js 6
 $NODE $DIR/brands.js
 $NODE $DIR/link_brands.js

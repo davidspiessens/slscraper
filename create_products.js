@@ -77,8 +77,7 @@ function normalizeForMatching(name) {
     .toLowerCase()
     .replace(/\s*\([^)]*\)/g, "")
     .replace(/-/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/\s+/g, "");
 }
 
 async function getExistingProductKeys() {

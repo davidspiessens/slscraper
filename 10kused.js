@@ -42,6 +42,22 @@ const SUPPLIER = 21; // 10Kused
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// De remote database wordt vanaf hier af en toe even onbereikbaar (ETIMEDOUT /
+// PROTOCOL_CONNECTION_LOST). Een volledige scrape duurt uren, dus een
+// kortstondige onderbreking mag de run niet laten crashen: opnieuw proberen.
+async function query(sql, params) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await pool.query(sql, params);
+    } catch (err) {
+      const transient = err.fatal || ["ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "EPIPE"].includes(err.code);
+      if (!transient || attempt >= 6) throw err;
+      console.log(`  ⚠ DB-fout (${err.code}), poging ${attempt}/6, opnieuw proberen over ${attempt * 10}s...`);
+      await sleep(attempt * 10000);
+    }
+  }
+}
+
 const PRODUCT_CARD_SELECTOR = ".product.type-product";
 
 /** Haal alle productkaarten op de huidige pagina op. */
@@ -84,7 +100,7 @@ async function getProductsOnPage(page) {
 
 /** Zoekt een bestaand product op basis van supplier + supplier_product_id, of maakt het aan. */
 async function getOrCreateProductId(prod) {
-  const [rows] = await pool.query(
+  const [rows] = await query(
     "SELECT id FROM bstock_product WHERE supplier_id = ? AND supplier_product_id = ? LIMIT 1",
     [SUPPLIER, prod.id]
   );
@@ -92,7 +108,7 @@ async function getOrCreateProductId(prod) {
     return rows[0].id;
   }
 
-  const [result] = await pool.query(
+  const [result] = await query(
     "INSERT INTO bstock_product (supplier_id, supplier_product_id, title, quantity, url) VALUES (?, ?, ?, ?, ?)",
     [SUPPLIER, prod.id, prod.title, parseQuantity(prod.title), prod.url]
   );
@@ -117,7 +133,7 @@ async function saveProducts(products) {
     const productId = await getOrCreateProductId(prod);
 
     try {
-      await pool.query(
+      await query(
         "INSERT INTO bstock_product_price (bstock_product_id, priceOriginal, priceNow, discount_label) VALUES (?, ?, ?, ?)",
         [productId, prod.priceOriginal, prod.priceNow, prod.discount || ""]
       );
@@ -168,7 +184,18 @@ async function scrape() {
 
   while (currentUrl) {
     console.log(`Pagina ${pageNum}: ${currentUrl}`);
-    await page.goto(currentUrl, { waitUntil: "load", timeout: 30000 });
+    // De site is af en toe traag; een eenmalige timeout mag een run van
+    // uren niet afbreken. Een paar keer opnieuw proberen met oplopende pauze.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await page.goto(currentUrl, { waitUntil: "load", timeout: 60000 });
+        break;
+      } catch (err) {
+        if (attempt >= 4) throw err;
+        console.log(`  ⚠ Laden mislukt (${err.name}), poging ${attempt}/4, opnieuw proberen over ${attempt * 30}s...`);
+        await sleep(attempt * 30000);
+      }
+    }
 
     try {
       await page.waitForSelector(PRODUCT_CARD_SELECTOR, { timeout: 15000 });

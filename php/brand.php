@@ -68,6 +68,12 @@ $allProductsStmt->execute();
 $allProducts = $allProductsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $allProductsStmt->close();
 
+$aliasStmt = $mysqli->prepare('SELECT id, alias FROM brand_alias WHERE brand_id = ? ORDER BY alias ASC');
+$aliasStmt->bind_param('i', $brandId);
+$aliasStmt->execute();
+$aliases = $aliasStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$aliasStmt->close();
+
 $mysqli->close();
 
 ?>
@@ -131,6 +137,26 @@ $mysqli->close();
             </form>
         <?php endif; ?>
     </p>
+
+    <h2>Aliassen</h2>
+    <p class="meta">Alternatieve schrijfwijzen die naar dit merk verwijzen (bv. "L’Acoustics"). Een titel die ermee begint, wordt aan dit merk gekoppeld.</p>
+    <p class="meta">
+        <?php if (empty($aliases)): ?>
+            Geen aliassen.
+        <?php else: foreach ($aliases as $alias): ?>
+            <form method="post" action="delete_brand_alias.php" style="display:inline-block; margin-right:0.8rem;">
+                <input type="hidden" name="id" value="<?= (int) $alias['id'] ?>">
+                <input type="hidden" name="brand_id" value="<?= (int) $brand['id'] ?>">
+                <?= htmlspecialchars($alias['alias']) ?>
+                <button type="submit" title="Alias verwijderen" onclick="return confirm('Deze alias verwijderen?');">&times;</button>
+            </form>
+        <?php endforeach; endif; ?>
+    </p>
+    <form method="post" action="add_brand_alias.php" style="margin:0.5rem 0 1rem 0;">
+        <input type="hidden" name="brand_id" value="<?= (int) $brand['id'] ?>">
+        <input type="text" name="alias" placeholder="Nieuwe alias..." required>
+        <button type="submit" title="Alias toevoegen">&#10133;</button>
+    </form>
 
     <h2>Bstock producten</h2>
     <table>

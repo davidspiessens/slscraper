@@ -92,15 +92,25 @@ function normalizeForMatching(name) {
     .trim();
 }
 
-/** Zoekt het product waarvan de naam een prefix is van `name`, op een woordgrens. */
+/** Zoekt het product waarvan de naam een prefix is van `name`, op een
+ * woordgrens. Spaties tellen niet mee: het product "CDJ-1000MK3" matcht dus
+ * ook de titel "CDJ-1000 MK3" (de eerste woorden van de titel, aan elkaar
+ * geschreven, zijn gelijk aan de productnaam). Zonder dit zou de titel een
+ * korter product "CDJ-1000" als prefix krijgen. De kandidaten staan van lang
+ * naar kort, dus het meest specifieke product wint. */
 function findPrefixMatch(name, candidates) {
-  const nameNorm = normalizeForMatching(name);
+  const nameWords = normalizeForMatching(name).split(" ");
 
   return candidates.find((p) => {
-    const prefixNorm = normalizeForMatching(p.name);
-    if (!nameNorm.startsWith(prefixNorm)) return false;
-    const nextChar = nameNorm[prefixNorm.length];
-    return nextChar === undefined || /\s/.test(nextChar);
+    const prefixCompact = normalizeForMatching(p.name).replace(/ /g, "");
+    if (!prefixCompact) return false;
+    let joined = "";
+    for (const word of nameWords) {
+      joined += word;
+      if (joined === prefixCompact) return true;
+      if (joined.length >= prefixCompact.length) return false;
+    }
+    return false;
   });
 }
 

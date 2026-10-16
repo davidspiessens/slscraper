@@ -100,8 +100,34 @@ function normalize_for_matching(string $name): string
     $normalized = mb_strtolower($name);
     $normalized = preg_replace('/\s*\([^)]*\)/', '', $normalized);
     $normalized = str_replace('-', '', $normalized);
-    $normalized = preg_replace('/\s+/', ' ', $normalized);
-    return trim($normalized);
+    // Spaties tellen niet mee ("CDJ-1000 MK3" == "CDJ-1000MK3"), zie link_products.js.
+    return preg_replace('/\s+/', '', $normalized);
+}
+
+/**
+ * Substring-match die onverschillig is voor scheidingstekens en spaties:
+ * "cdj 1000", "cdj-1000" en "cdj1000" vinden alle drie "Pioneer CDJ-1000MK3".
+ * Elke reeks niet-letters/cijfers telt als één scheidingsteken; daarna wordt
+ * zowel met als zonder spaties vergeleken. Voor het zonder-spaties-geval
+ * moet de zoekterm minstens 4 tekens bevatten, anders geven korte termen
+ * te veel toevalstreffers over woordgrenzen heen.
+ */
+function search_text_contains(string $query, string $text): bool
+{
+    $spaced = static fn(string $s): string => trim((string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', mb_strtolower($s)));
+
+    $queryNorm = $spaced($query);
+    if ($queryNorm === '') {
+        return false;
+    }
+    $textNorm = $spaced($text);
+
+    if (mb_strpos($textNorm, $queryNorm) !== false) {
+        return true;
+    }
+
+    $queryCompact = str_replace(' ', '', $queryNorm);
+    return mb_strlen($queryCompact) >= 4 && mb_strpos(str_replace(' ', '', $textNorm), $queryCompact) !== false;
 }
 
 /** Normaliseert een woord voor zoekvergelijking: lowercase, leestekens rond het woord weg. */
