@@ -46,7 +46,7 @@ $historyStmt->close();
 // Aankopen die aan deze specifieke listing gekoppeld zijn, in de grafiek
 // tonen als duidelijk onderscheiden markering t.o.v. de prijspunten.
 $chartPurchasesStmt = $mysqli->prepare(
-    'SELECT pu.price, pu.invoice_date, s.name AS supplier_name
+    'SELECT pu.id, pu.price, pu.invoice_date, s.name AS supplier_name
      FROM purchase pu
      JOIN supplier s ON s.id = pu.supplier_id
      WHERE pu.bstock_product_id = ?
@@ -55,14 +55,30 @@ $chartPurchasesStmt = $mysqli->prepare(
 $chartPurchasesStmt->bind_param('i', $productId);
 $chartPurchasesStmt->execute();
 $chartPurchases = array_map(
-    fn($p) => ['price' => $p['price'], 'invoice_date' => $p['invoice_date'], 'label' => $p['supplier_name']],
+    fn($p) => ['key' => (int) $p['id'], 'price' => $p['price'], 'invoice_date' => $p['invoice_date'], 'label' => $p['supplier_name']],
     $chartPurchasesStmt->get_result()->fetch_all(MYSQLI_ASSOC)
 );
 $chartPurchasesStmt->close();
 
+// Verkopen van die aankopen: groene driehoek + lijn naar de aankoop.
+$chartSalesStmt = $mysqli->prepare(
+    'SELECT sa.purchase_id, sa.price, sa.invoice_date
+     FROM sale sa
+     JOIN purchase pu ON pu.id = sa.purchase_id
+     WHERE pu.bstock_product_id = ?
+     ORDER BY sa.invoice_date ASC'
+);
+$chartSalesStmt->bind_param('i', $productId);
+$chartSalesStmt->execute();
+$chartSales = array_map(
+    fn($sa) => ['key' => (int) $sa['purchase_id'], 'price' => $sa['price'], 'invoice_date' => $sa['invoice_date']],
+    $chartSalesStmt->get_result()->fetch_all(MYSQLI_ASSOC)
+);
+$chartSalesStmt->close();
+
 $mysqli->close();
 
-$chart = render_price_chart($history, $chartPurchases);
+$chart = render_price_chart($history, $chartPurchases, $chartSales);
 $historyDesc = array_reverse($history);
 $quantity = max(1, (int) $product['quantity']);
 

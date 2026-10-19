@@ -99,6 +99,7 @@ function normalize_for_matching(string $name): string
 {
     $normalized = mb_strtolower($name);
     $normalized = preg_replace('/\s*\([^)]*\)/', '', $normalized);
+    $normalized = str_replace('nexus', 'nxs', $normalized); // Pioneer: "Nexus" is hetzelfde als "NXS"
     $normalized = str_replace('-', '', $normalized);
     // Spaties tellen niet mee ("CDJ-1000 MK3" == "CDJ-1000MK3"), zie link_products.js.
     return preg_replace('/\s+/', '', $normalized);
@@ -242,6 +243,40 @@ function render_vat_toggle(): string
     return ob_get_clean();
 }
 
+/** Tooltip voor een verkoop in de grafiek, met marge t.o.v. de aankoop als die bekend is. */
+function chart_sale_tooltip(float $price, int $t, ?float $purchasePrice): string
+{
+    $tooltip = 'Verkoop: ' . euro((string) $price) . ' op ' . date('d/m/Y', $t);
+    if ($purchasePrice !== null) {
+        $tooltip .= ' (marge ' . euro_excl((string) ($price - $purchasePrice)) . ' excl. BTW)';
+    }
+    return $tooltip;
+}
+
+/** Groene driehoek: verkoop, onderscheiden van de gele aankoop-diamant. */
+function chart_sale_marker(float $x, float $y, string $tooltip): string
+{
+    $size = 6;
+    $pts = "$x," . ($y - $size) . " " . ($x + $size) . "," . ($y + $size) . " " . ($x - $size) . "," . ($y + $size);
+    return '<polygon points="' . $pts . '" fill="#2ecc71" stroke="#000" stroke-width="1.5"><title>' . htmlspecialchars($tooltip) . '</title></polygon>';
+}
+
+/** Gestippelde lijn van aankoop naar verkoop: groen bij winst, rood bij verlies. */
+function chart_sale_link(array $from, array $to, float $purchasePrice, float $salePrice): string
+{
+    $color = $salePrice >= $purchasePrice ? '#27ae60' : '#c0392b';
+    return '<line x1="' . $from[0] . '" y1="' . $from[1] . '" x2="' . $to[0] . '" y2="' . $to[1]
+        . '" stroke="' . $color . '" stroke-width="2" stroke-dasharray="5,3" />';
+}
+
+/** Legenda-item voor verkopen (marker + uitleg van de verbindingslijn). */
+function chart_sale_legend(): string
+{
+    return '<span style="display:inline-block; margin-right:1rem;">'
+        . '<span style="display:inline-block; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:10px solid #2ecc71; margin-right:0.3rem; vertical-align:middle;"></span>'
+        . 'Verkoop (lijn vanaf aankoop: <span style="color:#27ae60;">winst</span> / <span style="color:#c0392b;">verlies</span>)</span>';
+}
+
 /**
  * Rendert een SVG line-chart van de prijshistoriek (chronologisch, oud ->
  * nieuw). $purchases (optioneel, elk met price/invoice_date/label) wordt als
@@ -249,8 +284,12 @@ function render_vat_toggle(): string
  * x-as is gelijk verdeeld per datapunt (geen echte tijdsas), dus aankopen
  * worden chronologisch tussen de prijspunten ingevoegd i.p.v. op hun exacte
  * datum gepositioneerd.
+ *
+ * $sales (optioneel, elk met price/invoice_date/key) toont verkopen als groene
+ * driehoek; 'key' verwijst naar de 'key' van de bijbehorende aankoop, waarmee
+ * een gestippelde lijn aankoop -> verkoop wordt getekend.
  */
-function render_price_chart(array $history, array $purchases = []): string
+function render_price_chart(array $history, array $purchases = [], array $sales = []): string
 {
     if (empty($history) && empty($purchases)) {
         return '<p>Geen prijshistoriek beschikbaar.</p>';
@@ -270,7 +309,16 @@ function render_price_chart(array $history, array $purchases = []): string
         $events[] = ['type' => 'price', 'price' => (float) $h['priceNow'], 't' => strtotime($h['created'])];
     }
     foreach ($purchases as $p) {
-        $events[] = ['type' => 'purchase', 'price' => (float) $p['price'], 't' => strtotime($p['invoice_date']), 'label' => $p['label'] ?? null];
+        $events[] = ['type' => 'purchase', 'price' => (float) $p['price'], 't' => strtotime($p['invoice_date']), 'label' => $p['label'] ?? null, 'key' => $p['key'] ?? null];
+    }
+    $purchasePriceByKey = [];
+    foreach ($purchases as $p) {
+        if (isset($p['key'])) {
+            $purchasePriceByKey[$p['key']] = (float) $p['price'];
+        }
+    }
+    foreach ($sales as $sa) {
+        $events[] = ['type' => 'sale', 'price' => (float) $sa['price'], 't' => strtotime($sa['invoice_date']), 'key' => $sa['key'] ?? null];
     }
     usort($events, fn($a, $b) => $a['t'] <=> $b['t']);
 
@@ -296,13 +344,27 @@ function render_price_chart(array $history, array $purchases = []): string
     $pricePoints = [];
     $circles = '';
     $purchaseMarkers = '';
+    $purchasePos = [];
+    $saleLinks = [];
     foreach ($events as $i => $e) {
         [$x, $y] = $toXY($e['price'], $i);
-        if ($e['type'] === 'price') {
+        if ($e['type'] === 'purchase' && $e['key'] !== null) {
+            $purchasePos[$e['key']] = [$x, $y];
+        }
+    }
+    foreach ($events as $i => $e) {
+        [$x, $y] = $toXY($e['price'], $i);
+        if ($e['type'] === 'sale') {
+            $purchasePrice = $purchasePriceByKey[$e['key']] ?? null;
+            $purchaseMarkers .= chart_sale_marker($x, $y, chart_sale_tooltip($e['price'], $e['t'], $purchasePrice));
+            if ($purchasePrice !== null && isset($purchasePos[$e['key']])) {
+                $saleLinks[] = chart_sale_link($purchasePos[$e['key']], [$x, $y], $purchasePrice, $e['price']);
+            }
+        } elseif ($e['type'] === 'price') {
             $pricePoints[] = [$x, $y];
             $tooltip = euro((string) $e['price']) . ' op ' . date('d/m/Y', $e['t']);
             $circles .= '<circle cx="' . $x . '" cy="' . $y . '" r="3" fill="#0a4d92"><title>' . htmlspecialchars($tooltip) . '</title></circle>';
-        } else {
+        } elseif ($e['type'] === 'purchase') {
             $tooltip = 'Aankoop: ' . euro((string) $e['price']) . ' op ' . date('d/m/Y', $e['t']) . (!empty($e['label']) ? ' (' . $e['label'] . ')' : '');
             $size = 6;
             $pts = "$x," . ($y - $size) . " " . ($x + $size) . ",$y $x," . ($y + $size) . " " . ($x - $size) . ",$y";
@@ -325,9 +387,11 @@ function render_price_chart(array $history, array $purchases = []): string
         $xLabels .= '<text x="' . $x . '" y="' . ($padT + $plotH + 15) . '" text-anchor="middle">' . htmlspecialchars($dateStr) . '</text>';
     }
 
-    $legend = !empty($purchases)
-        ? '<div style="margin-bottom:0.4rem; font-size:0.85rem;"><span style="display:inline-block; width:10px; height:10px; background:#f1c40f; border:1.5px solid #000; transform:rotate(45deg); margin-right:0.4rem; vertical-align:middle;"></span>Aankoop</div>'
-        : '';
+    $legend = '';
+    if (!empty($purchases)) {
+        $legend = '<div style="margin-bottom:0.4rem; font-size:0.85rem;"><span style="display:inline-block; margin-right:1rem;"><span style="display:inline-block; width:10px; height:10px; background:#f1c40f; border:1.5px solid #000; transform:rotate(45deg); margin-right:0.4rem; vertical-align:middle;"></span>Aankoop</span>'
+            . (!empty($sales) ? chart_sale_legend() : '') . '</div>';
+    }
 
     ob_start();
     ?>
@@ -338,6 +402,7 @@ function render_price_chart(array $history, array $purchases = []): string
         <text x="4" y="<?= $padT + 4 ?>"><?= htmlspecialchars(euro((string) $max)) ?></text>
         <text x="4" y="<?= $padT + $plotH ?>"><?= htmlspecialchars(euro((string) $min)) ?></text>
         <polyline points="<?= $toStr($pricePoints) ?>" fill="none" stroke="#0a4d92" stroke-width="2" />
+        <?= implode('', $saleLinks) ?>
         <?= $circles ?>
         <?= $purchaseMarkers ?>
         <?= $xLabels ?>
@@ -351,9 +416,10 @@ function render_price_chart(array $history, array $purchases = []): string
  * bstock-listing) op een gedeelde tijdsas. $purchases (optioneel, elk met
  * t/price/label) wordt als duidelijk onderscheiden gele diamant op hun
  * werkelijke datum getoond, apart van de (kleinere, gekleurde) b-stock
- * prijspunten.
+ * prijspunten. $sales (optioneel, elk met t/price/key) wordt als groene
+ * driehoek getoond, met een gestippelde lijn naar de aankoop met dezelfde key.
  */
-function render_multi_price_chart(array $series, array $purchases = []): string
+function render_multi_price_chart(array $series, array $purchases = [], array $sales = []): string
 {
     $allPoints = !empty($series) ? array_merge(...array_column($series, 'points')) : [];
     if (empty($allPoints) && empty($purchases)) {
@@ -369,8 +435,8 @@ function render_multi_price_chart(array $series, array $purchases = []): string
     $plotW = $width - $padL - $padR;
     $plotH = $height - $padT - $padB;
 
-    $times = array_merge(array_column($allPoints, 't'), array_column($purchases, 't'));
-    $prices = array_merge(array_column($allPoints, 'price'), array_column($purchases, 'price'));
+    $times = array_merge(array_column($allPoints, 't'), array_column($purchases, 't'), array_column($sales, 't'));
+    $prices = array_merge(array_column($allPoints, 'price'), array_column($purchases, 'price'), array_column($sales, 'price'));
 
     $minT = min($times);
     $maxT = max($times);
@@ -431,6 +497,28 @@ function render_multi_price_chart(array $series, array $purchases = []): string
             . 'Aankoop</span>';
     }
 
+    // Verkopen: groene driehoek, met gestippelde lijn vanaf de bijbehorende
+    // aankoop (zelfde 'key'): groen bij winst, rood bij verlies.
+    $saleLinks = '';
+    $purchaseByKey = [];
+    foreach ($purchases as $p) {
+        if (isset($p['key'])) {
+            $purchaseByKey[$p['key']] = $p;
+        }
+    }
+    foreach ($sales as $sa) {
+        $purchase = $purchaseByKey[$sa['key'] ?? null] ?? null;
+        [$x, $y] = $toXY($sa['t'], (float) $sa['price']);
+        $purchasePrice = $purchase ? (float) $purchase['price'] : null;
+        $purchaseMarkers .= chart_sale_marker($x, $y, chart_sale_tooltip((float) $sa['price'], $sa['t'], $purchasePrice));
+        if ($purchase) {
+            $saleLinks .= chart_sale_link($toXY($purchase['t'], $purchasePrice), [$x, $y], $purchasePrice, (float) $sa['price']);
+        }
+    }
+    if (!empty($sales)) {
+        $legend .= chart_sale_legend();
+    }
+
     // Datumlabels op de x-as (6 evenredig verspreide tijdstippen tussen minT en maxT)
     $tickCount = 6;
     $xLabels = '';
@@ -450,6 +538,7 @@ function render_multi_price_chart(array $series, array $purchases = []): string
         <text x="4" y="<?= $padT + 4 ?>"><?= htmlspecialchars(euro((string) $maxP)) ?></text>
         <text x="4" y="<?= $padT + $plotH ?>"><?= htmlspecialchars(euro((string) $minP)) ?></text>
         <?= $polylines ?>
+        <?= $saleLinks ?>
         <?= $purchaseMarkers ?>
         <?= $xLabels ?>
     </svg>

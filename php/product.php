@@ -137,16 +137,35 @@ $purchasesStmt->execute();
 $purchases = $purchasesStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $purchasesStmt->close();
 
+// Verkopen van deze aankopen, voor de grafiek (driehoek + lijn naar de aankoop).
+$salesStmt = $mysqli->prepare(
+    'SELECT sa.purchase_id, sa.price, sa.invoice_date
+     FROM sale sa
+     JOIN purchase pu ON pu.id = sa.purchase_id
+     WHERE pu.product_id = ?
+     ORDER BY sa.invoice_date ASC'
+);
+$salesStmt->bind_param('i', $productId);
+$salesStmt->execute();
+$chartSales = $salesStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$salesStmt->close();
+
 $mysqli->close();
 
 // Aankopen op de gedeelde tijdsas van de grafiek tonen, duidelijk
 // onderscheiden van de (per-listing gekleurde) b-stock prijspunten.
 $purchasePoints = array_map(fn($p) => [
+    'key' => (int) $p['id'],
     't' => strtotime($p['invoice_date']),
     'price' => (float) $p['price'],
     'label' => $p['supplier_name'],
 ], $purchases);
-$listingsChart = render_multi_price_chart($priceSeries, $purchasePoints);
+$salePoints = array_map(fn($sa) => [
+    'key' => (int) $sa['purchase_id'],
+    't' => strtotime($sa['invoice_date']),
+    'price' => (float) $sa['price'],
+], $chartSales);
+$listingsChart = render_multi_price_chart($priceSeries, $purchasePoints, $salePoints);
 
 // Merknaam zit niet meer in product.name (zie ignore_product.php-historiek) —
 // hier expliciet samenvoegen voor titel/heading, elders (bv. de productlijst
