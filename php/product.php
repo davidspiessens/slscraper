@@ -100,10 +100,22 @@ if (!empty($listingIds)) {
         ];
     }
 
+    $listingById = [];
+    foreach ($listings as $listing) {
+        $listingById[(int) $listing['id']] = $listing;
+    }
+
     foreach ($pointsByListing as $listingId => $points) {
         $quantity = max(1, (int) ($quantityByListingId[$listingId] ?? 1));
         $label = $quantity > 1 ? "#$listingId (×$quantity, per stuk)" : "#$listingId";
-        $priceSeries[] = ['label' => $label, 'points' => $points];
+        $priceSeries[] = [
+            'id' => (int) $listingId,
+            'label' => $label,
+            'points' => $points,
+            'quantity' => $quantity,
+            'supplier' => $listingById[(int) $listingId]['supplier_name'] ?? null,
+            'title' => $listingById[(int) $listingId]['title'] ?? null,
+        ];
     }
 }
 $allPrices = array_column(array_merge(...array_column($priceSeries, 'points')), 'price');
@@ -207,6 +219,18 @@ $productFullName = trim(($product['brand_name'] ?? '') . ' ' . $product['name'])
         tr:hover {
             background: #eaf2ff !important;
         }
+        /* Rij die oplicht als je in de grafiek over het bijhorende punt/lijn hovert. */
+        tr.chart-hover {
+            background: #fff3b0 !important;
+            outline: 2px solid #f1c40f;
+            outline-offset: -2px;
+        }
+        #listings-chart [data-listing] {
+            cursor: pointer;
+        }
+        #listings-chart polyline.chart-hover {
+            stroke-width: 4;
+        }
         .num {
             text-align: right;
         }
@@ -285,7 +309,28 @@ $productFullName = trim(($product['brand_name'] ?? '') . ' ' . $product['name'])
     </table>
 
     <h2>Prijsverloop (alle gekoppelde B-stock listings)</h2>
-    <?= $listingsChart ?>
+    <div id="listings-chart"><?= $listingsChart ?></div>
+    <script>
+    // Hover op een punt, lijn of legenda-item in de grafiek laat de bijhorende
+    // listing-rij in de tabel oplichten (en de lijn dikker worden).
+    (function () {
+        var chart = document.getElementById('listings-chart');
+        if (!chart) return;
+        function setHighlight(id, on) {
+            document.querySelectorAll('tr[data-listing-id="' + id + '"]').forEach(function (row) {
+                row.classList.toggle('chart-hover', on);
+            });
+            chart.querySelectorAll('polyline[data-listing="' + id + '"]').forEach(function (line) {
+                line.classList.toggle('chart-hover', on);
+            });
+        }
+        chart.querySelectorAll('[data-listing]').forEach(function (el) {
+            var id = el.getAttribute('data-listing');
+            el.addEventListener('mouseenter', function () { setHighlight(id, true); });
+            el.addEventListener('mouseleave', function () { setHighlight(id, false); });
+        });
+    })();
+    </script>
 
     <h2>Aankopen (<?= count($purchases) ?>)</h2>
     <table>

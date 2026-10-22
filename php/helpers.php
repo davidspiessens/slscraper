@@ -100,6 +100,7 @@ function normalize_for_matching(string $name): string
     $normalized = mb_strtolower($name);
     $normalized = preg_replace('/\s*\([^)]*\)/', '', $normalized);
     $normalized = str_replace('nexus', 'nxs', $normalized); // Pioneer: "Nexus" is hetzelfde als "NXS"
+    $normalized = preg_replace('/(\d)-[kw](?=\s|$)/', '$1', $normalized); // kleursuffix na een cijfer ("PLX-500-K/-W") telt niet mee
     $normalized = str_replace('-', '', $normalized);
     // Spaties tellen niet mee ("CDJ-1000 MK3" == "CDJ-1000MK3"), zie link_products.js.
     return preg_replace('/\s+/', '', $normalized);
@@ -467,15 +468,32 @@ function render_multi_price_chart(array $series, array $purchases = [], array $s
         $points = array_map(fn($p) => $toXY($p['t'], $p['price']), $s['points']);
         $pointsStr = implode(' ', array_map(fn($p) => "{$p[0]},{$p[1]}", $points));
 
+        // Optionele extra's per reeks: 'id' (listing-id, voor het oplichten van de
+        // tabelrij via data-listing), 'supplier' en 'title' (tooltip),
+        // 'quantity' (> 1: prijzen zijn per stuk).
+        $listingAttr = isset($s['id']) ? ' data-listing="' . (int) $s['id'] . '"' : '';
+        $extraTooltip = '';
+        if (!empty($s['supplier'])) {
+            $extraTooltip .= "\nLeverancier: " . $s['supplier'];
+        }
+        if (!empty($s['title'])) {
+            $extraTooltip .= "\n" . $s['title'];
+        }
+        $perUnit = (int) ($s['quantity'] ?? 1) > 1 ? ' (per stuk, ×' . (int) $s['quantity'] . ')' : '';
+
         if (count($points) > 1) {
-            $polylines .= '<polyline points="' . htmlspecialchars($pointsStr) . '" fill="none" stroke="' . $color . '" stroke-width="2" />';
+            $polylines .= '<polyline class="series-line"' . $listingAttr . ' points="' . htmlspecialchars($pointsStr) . '" fill="none" stroke="' . $color . '" stroke-width="2" />';
         }
         foreach ($points as $j => $p) {
-            $tooltip = euro((string) $s['points'][$j]['price']) . ' op ' . date('d/m/Y', $s['points'][$j]['t']);
-            $polylines .= '<circle cx="' . $p[0] . '" cy="' . $p[1] . '" r="3" fill="' . $color . '"><title>' . htmlspecialchars($tooltip) . '</title></circle>';
+            $tooltip = euro((string) $s['points'][$j]['price']) . $perUnit . ' op ' . date('d/m/Y', $s['points'][$j]['t']) . $extraTooltip;
+            // Onzichtbare, grotere cirkel als hover-doel: de zichtbare stip (r=3) is lastig te raken.
+            $polylines .= '<g class="series-point"' . $listingAttr . '>'
+                . '<circle cx="' . $p[0] . '" cy="' . $p[1] . '" r="8" fill="transparent" />'
+                . '<circle cx="' . $p[0] . '" cy="' . $p[1] . '" r="3" fill="' . $color . '" />'
+                . '<title>' . htmlspecialchars($tooltip) . '</title></g>';
         }
 
-        $legend .= '<span style="display:inline-block; margin-right:1rem;">'
+        $legend .= '<span' . $listingAttr . ' style="display:inline-block; margin-right:1rem;">'
             . '<span style="display:inline-block; width:10px; height:10px; background:' . $color . '; margin-right:0.3rem;"></span>'
             . htmlspecialchars($s['label']) . '</span>';
     }
@@ -590,7 +608,7 @@ function render_product_row(array $row, bool $showGenerateAction = false, ?strin
     $urlHost = preg_replace('/^www\./', '', (string) parse_url($row['url'], PHP_URL_HOST));
     $quantity = max(1, (int) ($row['quantity'] ?? 1));
     ?>
-    <tr<?= $rowStyle ?>>
+    <tr<?= $rowStyle ?> data-listing-id="<?= (int) $row['id'] ?>">
         <td>
             <a href="bstock_product.php?id=<?= (int) $row['id'] ?>"><?= htmlspecialchars($row['title']) ?></a>
             <?php if ($quantity > 1): ?>
