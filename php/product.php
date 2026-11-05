@@ -14,7 +14,7 @@ if (!$productId) {
 $mysqli = get_db_connection();
 
 $productStmt = $mysqli->prepare(
-    'SELECT p.id, p.name, p.ean, p.archived, p.ignored, p.created,
+    'SELECT p.id, p.name, p.ean, p.archived, p.ignored, p.created, p.deal_price,
             b.id AS brand_id, b.name AS brand_name, b.weight
      FROM product p
      LEFT JOIN brand b ON b.id = p.brand_id
@@ -269,6 +269,16 @@ $productFullName = trim(($product['brand_name'] ?? '') . ' ' . $product['name'])
         <?php endif; ?>
     </p>
     <p class="meta">Laagste prijs (per stuk): <?= euro($minPrice) ?> &nbsp;|&nbsp; Hoogste prijs (per stuk): <?= euro($maxPrice) ?></p>
+    <form method="post" action="update_product_deal_price.php" class="meta">
+        <input type="hidden" name="id" value="<?= (int) $product['id'] ?>">
+        <label>
+            Speciale deal onder (per stuk, <?= get_vat_multiplier() > 1.0 ? 'incl.' : 'excl.' ?> btw): &euro;
+            <input type="text" name="deal_price" inputmode="decimal" size="8"
+                   value="<?= $product['deal_price'] !== null ? number_format((float) $product['deal_price'] * get_vat_multiplier(), 2, ',', '') : '' ?>">
+        </label>
+        <button type="submit" title="Opslaan">&#128190;</button>
+        <small style="color: #666;">Leeg = geen dealprijs.</small>
+    </form>
     <p class="meta"><a href="add_purchase.php?product_id=<?= (int) $product['id'] ?>">Aankoop registreren &rarr;</a></p>
 
     <h2>Leveranciers</h2>
