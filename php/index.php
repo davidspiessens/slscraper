@@ -159,13 +159,15 @@ $allDeals = $mysqli->query($dealsSql)->fetch_all(MYSQLI_ASSOC);
 
 // Speciale deals: actieve listings waarvan de prijs per stuk onder de
 // dealprijs zit die per product is ingegeven (product.deal_price, op
-// product.php).
+// product.php). Tot DEAL_PRICE_TOLERANCE erboven telt ook nog mee.
+const DEAL_PRICE_TOLERANCE = 0.01;
+
 $specialDealsSql = "
     SELECT p.id, p.title, p.url, p.quantity, p.product_id, pr.name AS product_name, pr.deal_price,
            b.id AS brand_id, b.name AS brand_name,
            sup.id AS supplier_id, sup.name AS supplier_name,
            lp.priceNow / GREATEST(p.quantity, 1) AS unit_price, lp.created AS price_created,
-           1 - lp.priceNow / GREATEST(p.quantity, 1) / pr.deal_price AS below_deal_price
+           lp.priceNow / GREATEST(p.quantity, 1) / pr.deal_price - 1 AS vs_deal_price
     FROM bstock_product p
     JOIN product pr ON pr.id = p.product_id
     $latestPriceJoin
@@ -174,8 +176,8 @@ $specialDealsSql = "
     WHERE pr.deal_price IS NOT NULL
       AND p.archived = 0 AND p.ignored = 0
       AND lp.priceNow > 0
-      AND lp.priceNow / GREATEST(p.quantity, 1) <= pr.deal_price
-    ORDER BY below_deal_price DESC
+      AND lp.priceNow / GREATEST(p.quantity, 1) <= pr.deal_price * " . (1 + DEAL_PRICE_TOLERANCE) . "
+    ORDER BY vs_deal_price ASC
 ";
 $specialDeals = $mysqli->query($specialDealsSql)->fetch_all(MYSQLI_ASSOC);
 
@@ -301,7 +303,8 @@ $mysqli->close();
 
     <h2>Speciale deals</h2>
     <p class="meta">
-        Actieve listings waarvan de prijs per stuk onder de dealprijs zit die je op de productpagina ingeeft.
+        Actieve listings waarvan de prijs per stuk onder de dealprijs zit die je op de productpagina ingeeft,
+        of er hoogstens <?= (int) round(DEAL_PRICE_TOLERANCE * 100) ?>% boven.
         <?php if ($dealPriceProducts): ?>
             <br>Dealprijzen (<?= count($dealPriceProducts) ?>):
             <?= implode(' - ', array_map(
@@ -321,7 +324,7 @@ $mysqli->close();
                 <th>Leverancier</th>
                 <th class="num">Prijs nu</th>
                 <th class="num">Dealprijs</th>
-                <th class="num">Onder dealprijs</th>
+                <th class="num">T.o.v. dealprijs</th>
                 <th>Prijs bijgewerkt</th>
                 <th>Actie</th>
             </tr>
@@ -355,7 +358,10 @@ $mysqli->close();
                         <?php if ((int) $row['quantity'] > 1): ?><br><small>per stuk (&times;<?= (int) $row['quantity'] ?>)</small><?php endif; ?>
                     </td>
                     <td class="num"><?= euro($row['deal_price']) ?></td>
-                    <td class="num"><strong>-<?= (int) round((float) $row['below_deal_price'] * 100) ?>%</strong></td>
+                    <?php $vsDealPrice = (float) $row['vs_deal_price']; ?>
+                    <td class="num"<?= $vsDealPrice > 0 ? ' style="color: #b35c00;" title="Boven de dealprijs"' : '' ?>>
+                        <strong><?= $vsDealPrice > 0 ? '+' : '' ?><?= number_format($vsDealPrice * 100, 1, ',', '') ?>%</strong>
+                    </td>
                     <td><?= htmlspecialchars($row['price_created']) ?></td>
                     <td>
                         <form method="post" action="ignore_bstock_product.php" style="margin:0;">
