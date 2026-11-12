@@ -27,7 +27,8 @@
  *   onderbroken run), wordt de detailpagina niet opnieuw bezocht.
  *
  * Uitvoeren:
- *     node audiovisualauctions.js
+ *     node audiovisualauctions.js            (alle gesloten veilingen)
+ *     node audiovisualauctions.js 83         (enkel veiling met dit auctionid)
  */
 
 const { chromium } = require("playwright");
@@ -37,6 +38,12 @@ const { parseQuantity } = require("./quantity");
 
 const BASE_URL = "https://www.audiovisual-auctions.com";
 const SUPPLIER = 20; // Audiovisual Auctions
+// Optioneel: enkel deze veiling scrapen (auctionid), i.p.v. alle gesloten veilingen.
+const ONLY_AUCTION_ID = process.argv[2] ? parseInt(process.argv[2], 10) : null;
+if (process.argv[2] && !Number.isInteger(ONLY_AUCTION_ID)) {
+  console.error("Gebruik: node audiovisualauctions.js [auctionid]");
+  process.exit(1);
+}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -209,8 +216,10 @@ async function scrape() {
 
   await log(SUPPLIER, "Start van audiovisualauctions.js", "start");
 
-  const auctionUrls = await getClosedAuctionUrls(page);
-  console.log(`Gevonden gesloten veilingen: ${auctionUrls.length}`);
+  const auctionUrls = ONLY_AUCTION_ID
+    ? [`${BASE_URL}/nl/dashboard?auctionid=${ONLY_AUCTION_ID}`]
+    : await getClosedAuctionUrls(page);
+  console.log(`Te scrapen veilingen: ${auctionUrls.length}`);
 
   let totalFound = 0;
   let totalSaved = 0;

@@ -93,6 +93,7 @@ $recentProductsSql = "
     LIMIT 50
 ";
 
+/* Echte deals staat in commentaar (misschien later nog nodig).
 // Echte deals: een actieve listing die minstens DEAL_MIN_BELOW onder de
 // mediaanprijs van hetzelfde product zit. De mediaan neemt per listing van
 // het afgelopen jaar één prijs (de laatste, per stuk), over alle
@@ -156,6 +157,7 @@ $dealsSql = "
 ";
 
 $allDeals = $mysqli->query($dealsSql)->fetch_all(MYSQLI_ASSOC);
+*/
 
 // Speciale deals: actieve listings waarvan de prijs per stuk onder de
 // dealprijs zit die per product is ingegeven (product.deal_price, op
@@ -189,6 +191,7 @@ $dealPriceProducts = $mysqli->query(
      ORDER BY b.name ASC, pr.name ASC'
 )->fetch_all(MYSQLI_ASSOC);
 
+/* Echte deals staat in commentaar (misschien later nog nodig).
 // Filteropties: enkel merken en leveranciers die effectief deals hebben.
 $dealBrands = [];
 $dealSuppliers = [];
@@ -216,6 +219,7 @@ foreach ($allDeals as $row) {
 }
 $dealCount = count($deals);
 $deals = array_slice(array_values($deals), 0, 50);
+*/
 
 $brandList = $mysqli->query($brandListSql)->fetch_all(MYSQLI_ASSOC);
 $lightestProducts = $mysqli->query($lightestProductsSql)->fetch_all(MYSQLI_ASSOC);
@@ -375,6 +379,7 @@ $mysqli->close();
         </tbody>
     </table>
 
+    <?php /* Echte deals staat in commentaar (misschien later nog nodig).
     <h2>Echte deals</h2>
     <p class="meta">
         Actieve listings die minstens <?= (int) round(DEAL_MIN_BELOW * 100) ?>% onder de mediaanprijs van hetzelfde product zitten
@@ -464,6 +469,7 @@ $mysqli->close();
             <?php endforeach; endif; ?>
         </tbody>
     </table>
+    */ ?>
 
     <?php
     $tableHeaders = function (): void {

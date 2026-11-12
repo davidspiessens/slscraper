@@ -10,6 +10,7 @@ $bstockRows = [];
 $productRows = [];
 $purchaseRows = [];
 $saleRows = [];
+$serials = [];
 $bstockTotal = 0;
 $productTotal = 0;
 
@@ -148,10 +149,19 @@ if ($query !== '') {
         }
     }
 
-    if (!empty($productIds) || !empty($bstockIds)) {
+    // Aankopen (en hun verkopen) ook terugvinden op serienummer.
+    $like = '%' . $query . '%';
+    $stmt = $mysqli->prepare('SELECT DISTINCT purchase_id FROM purchase_serial WHERE serial LIKE ?');
+    $stmt->bind_param('s', $like);
+    $stmt->execute();
+    $serialPurchaseIds = array_map('intval', array_column($stmt->get_result()->fetch_all(MYSQLI_ASSOC), 'purchase_id'));
+    $stmt->close();
+
+    if (!empty($productIds) || !empty($bstockIds) || !empty($serialPurchaseIds)) {
         $productPlaceholders = !empty($productIds) ? implode(',', array_fill(0, count($productIds), '?')) : 'NULL';
         $bstockPlaceholders = !empty($bstockIds) ? implode(',', array_fill(0, count($bstockIds), '?')) : 'NULL';
-        $params = array_merge($productIds, $bstockIds);
+        $serialPlaceholders = !empty($serialPurchaseIds) ? implode(',', array_fill(0, count($serialPurchaseIds), '?')) : 'NULL';
+        $params = array_merge($productIds, $bstockIds, $serialPurchaseIds);
         $types = str_repeat('i', count($params));
 
         // Zelfde kolommen als purchases.php, gefilterd op de gevonden product-/bstock-id's.
@@ -168,7 +178,7 @@ if ($query !== '') {
             JOIN supplier s ON s.id = pu.supplier_id
             LEFT JOIN bstock_product bp ON bp.id = pu.bstock_product_id
             LEFT JOIN sale sa ON sa.purchase_id = pu.id
-            WHERE pu.product_id IN ($productPlaceholders) OR pu.bstock_product_id IN ($bstockPlaceholders)
+            WHERE pu.product_id IN ($productPlaceholders) OR pu.bstock_product_id IN ($bstockPlaceholders) OR pu.id IN ($serialPlaceholders)
             ORDER BY pu.invoice_date DESC, pu.id DESC
         ";
         if (empty($params)) {
@@ -180,6 +190,7 @@ if ($query !== '') {
             $purchaseRows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
             $stmt->close();
         }
+        $serials = purchase_serials($mysqli, array_column($purchaseRows, 'id'));
 
         // Zelfde kolommen als sales.php, gefilterd op de gevonden product-/bstock-id's.
         $saleSql = "
@@ -194,7 +205,7 @@ if ($query !== '') {
             JOIN product p ON p.id = pu.product_id
             LEFT JOIN brand b ON b.id = p.brand_id
             JOIN supplier s ON s.id = pu.supplier_id
-            WHERE pu.product_id IN ($productPlaceholders) OR pu.bstock_product_id IN ($bstockPlaceholders)
+            WHERE pu.product_id IN ($productPlaceholders) OR pu.bstock_product_id IN ($bstockPlaceholders) OR pu.id IN ($serialPlaceholders)
             ORDER BY sa.invoice_date DESC, sa.id DESC
         ";
         if (empty($params)) {
@@ -379,13 +390,14 @@ if ($query !== '') {
                     <th class="num">Prijs</th>
                     <th>Factuurdatum</th>
                     <th>Factuurnummer</th>
+                    <th>Serienummers</th>
                     <th>Verkoop</th>
                     <th>Actie</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($purchaseRows)): ?>
-                    <tr><td colspan="9">Geen aankopen gevonden.</td></tr>
+                    <tr><td colspan="10">Geen aankopen gevonden.</td></tr>
                 <?php else: foreach ($purchaseRows as $row): ?>
                     <tr>
                         <td><a href="product.php?id=<?= (int) $row['product_id'] ?>"><?= htmlspecialchars($row['product_name']) ?></a></td>
@@ -407,6 +419,7 @@ if ($query !== '') {
                         <td class="num"><?= euro((string) $row['price']) ?></td>
                         <td><?= htmlspecialchars($row['invoice_date']) ?></td>
                         <td><?= htmlspecialchars($row['invoice_number']) ?></td>
+                        <td><?= htmlspecialchars(format_serials($serials[(int) $row['id']] ?? [])) ?></td>
                         <td>
                             <?php if ($row['sale_id']): ?>
                                 Verkocht (<?= euro((string) $row['sale_price']) ?>)

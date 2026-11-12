@@ -33,6 +33,9 @@ $prefillSupplierId = $isEdit ? $purchase['supplier_id'] : null;
 $prefillPrice = $isEdit ? $purchase['price'] : '';
 $prefillInvoiceDate = $isEdit ? $purchase['invoice_date'] : date('Y-m-d');
 $prefillInvoiceNumber = $isEdit ? $purchase['invoice_number'] : '';
+// Minstens één lege regel; een draadloze microfoon heeft er bv. twee (zender en ontvanger).
+$prefillSerials = $isEdit ? (purchase_serials($mysqli, [$editId])[$editId] ?? []) : [];
+$prefillSerials[] = ['serial' => '', 'label' => null];
 
 // Enkel in add-modus via een quick-add-link (?bstock_product_id=) tonen we de
 // listing als vaste (niet-bewerkbare) link; in edit-modus blijft het veld een
@@ -102,6 +105,18 @@ $mysqli->close();
         p.field {
             margin: 1rem 0;
         }
+        .serial-row {
+            display: flex;
+            gap: 0.4rem;
+            max-width: 400px;
+            margin-bottom: 0.3rem;
+        }
+        .serial-row input[name="serial[]"] {
+            flex: 2;
+        }
+        .serial-row input[name="serial_label[]"] {
+            flex: 1;
+        }
     </style>
 </head>
 <body>
@@ -168,7 +183,29 @@ $mysqli->close();
             <input type="text" id="invoice_number" name="invoice_number" value="<?= htmlspecialchars($prefillInvoiceNumber) ?>" required>
         </p>
 
+        <div class="field" style="margin: 1rem 0;">
+            <label>Serienummers</label> <small class="hint">(optioneel; label bv. "zender", "ontvanger")</small>
+            <div id="serials">
+                <?php foreach ($prefillSerials as $s): ?>
+                    <div class="serial-row">
+                        <input type="text" name="serial[]" placeholder="Serienummer" value="<?= htmlspecialchars($s['serial']) ?>">
+                        <input type="text" name="serial_label[]" placeholder="Label" value="<?= htmlspecialchars((string) $s['label']) ?>">
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <button type="button" id="add-serial">+ serienummer</button>
+        </div>
+
         <button type="submit"><?= $isEdit ? 'Aankoop bijwerken' : 'Aankoop registreren' ?></button>
     </form>
+    <script>
+        document.getElementById('add-serial').addEventListener('click', () => {
+            const rows = document.getElementById('serials');
+            const row = rows.lastElementChild.cloneNode(true);
+            row.querySelectorAll('input').forEach((input) => { input.value = ''; });
+            rows.appendChild(row);
+            row.querySelector('input').focus();
+        });
+    </script>
 </body>
 </html>

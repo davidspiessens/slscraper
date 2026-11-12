@@ -666,3 +666,67 @@ function render_product_row(array $row, bool $showGenerateAction = false, ?strin
     </tr>
     <?php
 }
+
+/** Serienummers per aankoop: [purchase_id => [['serial' => …, 'label' => …], …]], in volgorde van position. */
+function purchase_serials(mysqli $mysqli, array $purchaseIds): array
+{
+    $purchaseIds = array_values(array_unique(array_map('intval', $purchaseIds)));
+    if (empty($purchaseIds)) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($purchaseIds), '?'));
+    $stmt = $mysqli->prepare(
+        "SELECT purchase_id, serial, label FROM purchase_serial
+         WHERE purchase_id IN ($placeholders) ORDER BY purchase_id, position, id"
+    );
+    $stmt->bind_param(str_repeat('i', count($purchaseIds)), ...$purchaseIds);
+    $stmt->execute();
+    $serials = [];
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $serials[(int) $row['purchase_id']][] = ['serial' => $row['serial'], 'label' => $row['label']];
+    }
+    $stmt->close();
+    return $serials;
+}
+
+/** "ABC123 (zender), DEF456 (ontvanger)" */
+function format_serials(array $serials): string
+{
+    return implode(', ', array_map(
+        fn($s) => $s['serial'] . ($s['label'] !== null && $s['label'] !== '' ? ' (' . $s['label'] . ')' : ''),
+        $serials
+    ));
+}
+
+/** Serienummers uit het aankoopformulier (serial[] en serial_label[]); lege regels en dubbels vallen weg. */
+function serials_from_post(): array
+{
+    $serials = [];
+    $labels = (array) ($_POST['serial_label'] ?? []);
+    foreach ((array) ($_POST['serial'] ?? []) as $i => $serial) {
+        $serial = trim((string) $serial);
+        if ($serial === '' || isset($serials[$serial])) {
+            continue;
+        }
+        $label = trim((string) ($labels[$i] ?? ''));
+        $serials[$serial] = ['serial' => $serial, 'label' => $label === '' ? null : $label];
+    }
+    return array_values($serials);
+}
+
+/** Vervangt de serienummers van een aankoop. */
+function save_purchase_serials(mysqli $mysqli, int $purchaseId, array $serials): void
+{
+    $stmt = $mysqli->prepare('DELETE FROM purchase_serial WHERE purchase_id = ?');
+    $stmt->bind_param('i', $purchaseId);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $mysqli->prepare('INSERT INTO purchase_serial (purchase_id, serial, label, position) VALUES (?, ?, ?, ?)');
+    foreach ($serials as $i => $s) {
+        $position = $i + 1;
+        $stmt->bind_param('issi', $purchaseId, $s['serial'], $s['label'], $position);
+        $stmt->execute();
+    }
+    $stmt->close();
+}

@@ -73,6 +73,7 @@ $stmt = $mysqli->prepare(
 $stmt->bind_param('iiidssi', $bstockProductId, $productId, $supplierId, $price, $invoiceDate, $invoiceNumber, $id);
 $stmt->execute();
 $stmt->close();
+save_purchase_serials($mysqli, $id, serials_from_post());
 $mysqli->close();
 
 header('Location: purchases.php');

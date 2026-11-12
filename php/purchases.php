@@ -23,6 +23,7 @@ $sql = "
 ";
 
 $purchases = $mysqli->query($sql)->fetch_all(MYSQLI_ASSOC);
+$serials = purchase_serials($mysqli, array_column($purchases, 'id'));
 
 $mysqli->close();
 
@@ -88,13 +89,14 @@ $mysqli->close();
                 <th class="num">Prijs</th>
                 <th>Factuurdatum</th>
                 <th>Factuurnummer</th>
+                <th>Serienummers</th>
                 <th>Verkoop</th>
                 <th>Actie</th>
             </tr>
         </thead>
         <tbody>
             <?php if (empty($purchases)): ?>
-                <tr><td colspan="9">Geen aankopen gevonden.</td></tr>
+                <tr><td colspan="10">Geen aankopen gevonden.</td></tr>
             <?php else: foreach ($purchases as $row): ?>
                 <tr>
                     <td><a href="product.php?id=<?= (int) $row['product_id'] ?>"><?= htmlspecialchars($row['product_name']) ?></a></td>
@@ -116,6 +118,7 @@ $mysqli->close();
                     <td class="num"><?= euro((string) $row['price']) ?></td>
                     <td><?= htmlspecialchars($row['invoice_date']) ?></td>
                     <td><?= htmlspecialchars($row['invoice_number']) ?></td>
+                    <td><?= htmlspecialchars(format_serials($serials[(int) $row['id']] ?? [])) ?></td>
                     <td>
                         <?php if ($row['sale_id']): ?>
                             Verkocht (<?= euro((string) $row['sale_price']) ?>)

@@ -56,7 +56,9 @@ $stmt = $mysqli->prepare(
 );
 $stmt->bind_param('iiidss', $bstockProductId, $productId, $supplierId, $price, $invoiceDate, $invoiceNumber);
 $stmt->execute();
+$purchaseId = $stmt->insert_id;
 $stmt->close();
+save_purchase_serials($mysqli, $purchaseId, serials_from_post());
 $mysqli->close();
 
 header('Location: purchases.php');
