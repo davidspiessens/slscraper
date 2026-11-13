@@ -33,6 +33,7 @@ $prefillSupplierId = $isEdit ? $purchase['supplier_id'] : null;
 $prefillPrice = $isEdit ? $purchase['price'] : '';
 $prefillInvoiceDate = $isEdit ? $purchase['invoice_date'] : date('Y-m-d');
 $prefillInvoiceNumber = $isEdit ? $purchase['invoice_number'] : '';
+$prefillNote = $isEdit ? (string) $purchase['note'] : '';
 // Minstens één lege regel; een draadloze microfoon heeft er bv. twee (zender en ontvanger).
 $prefillSerials = $isEdit ? (purchase_serials($mysqli, [$editId])[$editId] ?? []) : [];
 $prefillSerials[] = ['serial' => '', 'label' => null];
@@ -95,7 +96,7 @@ $mysqli->close();
             font-weight: bold;
             font-size: 0.9rem;
         }
-        select, input[type="number"], input[type="date"], input[type="text"] {
+        select, input[type="number"], input[type="date"], input[type="text"], textarea {
             font-size: 0.9rem;
             padding: 0.3rem;
             width: 100%;
@@ -195,6 +196,11 @@ $mysqli->close();
             </div>
             <button type="button" id="add-serial">+ serienummer</button>
         </div>
+
+        <p class="field">
+            <label for="note">Opmerking</label> <small class="hint">(optioneel)</small><br>
+            <textarea id="note" name="note" rows="3"><?= htmlspecialchars($prefillNote) ?></textarea>
+        </p>
 
         <button type="submit"><?= $isEdit ? 'Aankoop bijwerken' : 'Aankoop registreren' ?></button>
     </form>

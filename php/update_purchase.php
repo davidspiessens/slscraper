@@ -16,6 +16,7 @@ $bstockProductId = filter_input(INPUT_POST, 'bstock_product_id', FILTER_VALIDATE
 $price = filter_input(INPUT_POST, 'price', FILTER_VALIDATE_FLOAT);
 $invoiceDate = (string) ($_POST['invoice_date'] ?? '');
 $invoiceNumber = trim((string) ($_POST['invoice_number'] ?? ''));
+$note = trim((string) ($_POST['note'] ?? '')) ?: null;
 
 $errors = [];
 if (!$id) {
@@ -67,10 +68,10 @@ if ($bstockProductId) {
 
 $stmt = $mysqli->prepare(
     'UPDATE purchase
-     SET bstock_product_id = ?, product_id = ?, supplier_id = ?, price = ?, invoice_date = ?, invoice_number = ?
+     SET bstock_product_id = ?, product_id = ?, supplier_id = ?, price = ?, invoice_date = ?, invoice_number = ?, note = ?
      WHERE id = ?'
 );
-$stmt->bind_param('iiidssi', $bstockProductId, $productId, $supplierId, $price, $invoiceDate, $invoiceNumber, $id);
+$stmt->bind_param('iiidsssi', $bstockProductId, $productId, $supplierId, $price, $invoiceDate, $invoiceNumber, $note, $id);
 $stmt->execute();
 $stmt->close();
 save_purchase_serials($mysqli, $id, serials_from_post());

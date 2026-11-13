@@ -15,6 +15,7 @@ $bstockProductId = filter_input(INPUT_POST, 'bstock_product_id', FILTER_VALIDATE
 $price = filter_input(INPUT_POST, 'price', FILTER_VALIDATE_FLOAT);
 $invoiceDate = (string) ($_POST['invoice_date'] ?? '');
 $invoiceNumber = trim((string) ($_POST['invoice_number'] ?? ''));
+$note = trim((string) ($_POST['note'] ?? '')) ?: null;
 
 $errors = [];
 if (!$productId) {
@@ -51,10 +52,10 @@ if ($bstockProductId) {
 }
 
 $stmt = $mysqli->prepare(
-    'INSERT INTO purchase (bstock_product_id, product_id, supplier_id, price, invoice_date, invoice_number)
-     VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT INTO purchase (bstock_product_id, product_id, supplier_id, price, invoice_date, invoice_number, note)
+     VALUES (?, ?, ?, ?, ?, ?, ?)'
 );
-$stmt->bind_param('iiidss', $bstockProductId, $productId, $supplierId, $price, $invoiceDate, $invoiceNumber);
+$stmt->bind_param('iiidsss', $bstockProductId, $productId, $supplierId, $price, $invoiceDate, $invoiceNumber, $note);
 $stmt->execute();
 $purchaseId = $stmt->insert_id;
 $stmt->close();

@@ -166,7 +166,7 @@ if ($query !== '') {
 
         // Zelfde kolommen als purchases.php, gefilterd op de gevonden product-/bstock-id's.
         $purchaseSql = "
-            SELECT pu.id, pu.price, pu.invoice_date, pu.invoice_number,
+            SELECT pu.id, pu.price, pu.invoice_date, pu.invoice_number, pu.note,
                    p.id AS product_id, p.name AS product_name,
                    b.id AS brand_id, b.name AS brand_name,
                    s.id AS supplier_id, s.name AS supplier_name,
@@ -400,7 +400,10 @@ if ($query !== '') {
                     <tr><td colspan="10">Geen aankopen gevonden.</td></tr>
                 <?php else: foreach ($purchaseRows as $row): ?>
                     <tr>
-                        <td><a href="product.php?id=<?= (int) $row['product_id'] ?>"><?= htmlspecialchars($row['product_name']) ?></a></td>
+                        <td>
+                            <a href="product.php?id=<?= (int) $row['product_id'] ?>"><?= htmlspecialchars($row['product_name']) ?></a>
+                            <?php if ($row['note'] !== null && $row['note'] !== ''): ?><br><small style="color: #666;"><?= nl2br(htmlspecialchars($row['note'])) ?></small><?php endif; ?>
+                        </td>
                         <td>
                             <?php if ($row['brand_id']): ?>
                                 <a href="brand.php?id=<?= (int) $row['brand_id'] ?>"><?= htmlspecialchars($row['brand_name']) ?></a>

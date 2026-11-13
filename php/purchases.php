@@ -7,7 +7,7 @@ require __DIR__ . '/helpers.php';
 $mysqli = get_db_connection();
 
 $sql = "
-    SELECT pu.id, pu.price, pu.invoice_date, pu.invoice_number,
+    SELECT pu.id, pu.price, pu.invoice_date, pu.invoice_number, pu.note,
            p.id AS product_id, p.name AS product_name,
            b.id AS brand_id, b.name AS brand_name,
            s.id AS supplier_id, s.name AS supplier_name,
@@ -71,6 +71,9 @@ $mysqli->close();
         .meta {
             margin: 0.2rem 0;
         }
+        .note {
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -99,7 +102,10 @@ $mysqli->close();
                 <tr><td colspan="10">Geen aankopen gevonden.</td></tr>
             <?php else: foreach ($purchases as $row): ?>
                 <tr>
-                    <td><a href="product.php?id=<?= (int) $row['product_id'] ?>"><?= htmlspecialchars($row['product_name']) ?></a></td>
+                    <td>
+                        <a href="product.php?id=<?= (int) $row['product_id'] ?>"><?= htmlspecialchars($row['product_name']) ?></a>
+                        <?php if ($row['note'] !== null && $row['note'] !== ''): ?><br><small class="note"><?= nl2br(htmlspecialchars($row['note'])) ?></small><?php endif; ?>
+                    </td>
                     <td>
                         <?php if ($row['brand_id']): ?>
                             <a href="brand.php?id=<?= (int) $row['brand_id'] ?>"><?= htmlspecialchars($row['brand_name']) ?></a>
